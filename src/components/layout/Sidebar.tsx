@@ -1,0 +1,124 @@
+import { Link, useLocation } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { 
+  LayoutDashboard, 
+  Users, 
+  MessageSquare, 
+  Megaphone, 
+  BarChart3, 
+  Vote, 
+  FileText, 
+  DollarSign,
+  Settings,
+  LogOut,
+  FolderOpen,
+  Bell
+} from 'lucide-react';
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: React.ElementType;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Announcements', href: '/announcements', icon: Megaphone },
+  { label: 'Group Chats', href: '/chats', icon: MessageSquare },
+  { label: 'Documents', href: '/documents', icon: FolderOpen },
+  { label: 'Polls & Surveys', href: '/polls', icon: BarChart3 },
+  { label: 'Elections', href: '/elections', icon: Vote },
+  { label: 'Faculty Members', href: '/faculty', icon: Users, adminOnly: true },
+  { label: 'Financial Records', href: '/finance', icon: DollarSign, adminOnly: true },
+  { label: 'Reports', href: '/reports', icon: FileText, adminOnly: true },
+];
+
+export function Sidebar() {
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  const filteredItems = navItems.filter(item => !item.adminOnly || isAdmin);
+
+  return (
+    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
+      <div className="flex h-full flex-col">
+        {/* Logo */}
+        <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
+            <span className="font-display text-lg font-bold text-accent-foreground">P</span>
+          </div>
+          <div>
+            <h1 className="font-display text-lg font-semibold text-sidebar-foreground">PACFU</h1>
+            <p className="text-xs text-sidebar-foreground/60">PSAU Portal</p>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {filteredItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            const Icon = item.icon;
+            
+            return (
+              <Link key={item.href} to={item.href}>
+                <Button
+                  variant={isActive ? 'sidebar-active' : 'sidebar'}
+                  className={cn(
+                    'w-full justify-start gap-3 px-3',
+                    isActive && 'border-l-2 border-accent rounded-l-none'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Button>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User Section */}
+        <div className="border-t border-sidebar-border p-4">
+          <div className="mb-3 flex items-center gap-3 px-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent">
+              <span className="text-sm font-medium text-sidebar-accent-foreground">
+                {user?.name?.charAt(0) || 'U'}
+              </span>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="truncate text-sm font-medium text-sidebar-foreground">
+                {user?.name}
+              </p>
+              <p className="truncate text-xs text-sidebar-foreground/60 capitalize">
+                {user?.role}
+              </p>
+            </div>
+            <Button variant="ghost" size="icon" className="text-sidebar-foreground/60 hover:text-sidebar-foreground">
+              <Bell className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="flex gap-2">
+            <Link to="/settings" className="flex-1">
+              <Button variant="sidebar" size="sm" className="w-full gap-2">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Button>
+            </Link>
+            <Button 
+              variant="sidebar" 
+              size="sm" 
+              onClick={logout}
+              className="gap-2 text-destructive hover:text-destructive"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
