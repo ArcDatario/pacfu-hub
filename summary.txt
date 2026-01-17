@@ -1,0 +1,138 @@
+PACFU PORTAL FOR PSAU – SYSTEM SUMMARY (AI PROMPT READY)
+
+SYSTEM OVERVIEW
+PACFU Portal for PSAU is a web-based internal system designed exclusively for PACFU (faculty union) members and administrators of Pampanga State Agricultural University (PSAU). The system supports faculty management, communication, collaboration, document handling, surveys, elections, and notifications.
+
+There are ONLY TWO USER ROLES:
+1. Admin
+2. Faculty
+
+No other roles are allowed.
+
+--------------------------------
+TECH STACK
+--------------------------------
+Frontend:
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+
+Backend:
+- Firebase Authentication (Email/Password)
+- Firebase Firestore Database
+
+Routing:
+- React Router DOM
+
+--------------------------------
+DEFAULT ADMIN ACCOUNT
+--------------------------------
+A default admin account is auto-created on first application load.
+
+Email: admin@pacfu.psau.edu
+Password: admin123
+
+(Admin credentials are for initial system access and setup.)
+
+--------------------------------
+CURRENT IMPLEMENTATION STATUS
+--------------------------------
+
+AUTHENTICATION & ROLES
+- Firebase Email/Password Login: WORKING
+- Role-based access control (Admin / Faculty): WORKING
+- Auth state management via React Context: IMPLEMENTED
+
+FACULTY MANAGEMENT (ADMIN)
+- Create faculty accounts: WORKING
+- Read/view faculty list: WORKING
+- Update faculty information: WORKING
+- Activate / Deactivate faculty accounts: WORKING
+- Faculty status handling (Active / Deactivated): WORKING
+
+DASHBOARD
+- Admin dashboard UI with statistics: UI READY
+- Data wiring to Firestore: IN PROGRESS
+
+COMMUNICATION
+- Direct Messages page: UI READY
+- Group Chats:
+  - UI READY
+  - Firebase rules and Firestore integration: NOT YET IMPLEMENTED
+
+SYSTEM MODULES (UI ONLY – BACKEND PENDING)
+- Announcements
+- Group Chats
+- Polls / Surveys
+- Elections
+- Document Management (Google Drive–like interface)
+
+--------------------------------
+FACULTY FEATURES (TARGET BEHAVIOR)
+--------------------------------
+Faculty users can:
+- Login securely
+- Chat with co-faculty in assigned group chats
+- Participate in polls and surveys created by Admin
+- Vote in elections created by Admin
+- Upload, view, and manage their own documents in a built-in drive-like page
+- Receive in-app and push notifications
+
+--------------------------------
+ADMIN FEATURES (TARGET BEHAVIOR)
+--------------------------------
+Admin users can:
+- Access an admin dashboard
+- Create and manage faculty accounts
+- Activate or deactivate faculty access
+- Create and assign group chats
+- Create announcements (with notifications)
+- Create polls/surveys
+- Create and manage elections
+- View all uploaded faculty documents
+- Manage financial records and receipts (future module)
+- Generate system reports (future module)
+
+--------------------------------
+FIREBASE SETUP REQUIRED
+--------------------------------
+To complete backend functionality:
+- Enable Email/Password Authentication in Firebase
+- Create Firestore Database (currently in test mode)
+- Update Firebase configuration in:
+  src/lib/firebase.ts
+
+--------------------------------
+KEY PROJECT FILES
+--------------------------------
+- src/services/authService.ts
+  → Authentication logic (login, logout, role handling)
+
+- src/services/facultyService.ts
+  → Faculty CRUD operations
+
+- src/services/chatService.ts
+  → Messaging logic (to be completed)
+
+- src/contexts/AuthContext.tsx
+  → Authentication state management
+
+- src/contexts/FacultyContext.tsx
+  → Faculty state management
+
+--------------------------------
+SYSTEM GOAL
+--------------------------------
+To build a secure, role-based PACFU Portal for PSAU that centralizes:
+- Faculty collaboration
+- Communication
+- Document management
+- Surveys and elections
+- Administrative control
+
+Admin acts as the system controller.
+Faculty acts as participants and collaborators.
+
+END OF SYSTEM SUMMARY
