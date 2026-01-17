@@ -2,12 +2,24 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User, UserRole, AuthState } from '@/types/auth';
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   setDemoUser: (role: UserRole) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Default credentials for demo accounts
+export const defaultCredentials = {
+  admin: {
+    email: 'admin@pacfu.psau.edu',
+    password: 'admin123',
+  },
+  faculty: {
+    email: 'faculty@pacfu.psau.edu',
+    password: 'faculty123',
+  },
+};
 
 // Demo users for testing
 const demoUsers: Record<UserRole, User> = {
@@ -36,21 +48,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: false,
   });
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setAuthState((prev) => ({ ...prev, isLoading: true }));
     
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000));
     
-    // For demo, check if email contains 'admin'
-    const role: UserRole = email.includes('admin') ? 'admin' : 'faculty';
-    const user = demoUsers[role];
+    // Check against default credentials
+    if (email === defaultCredentials.admin.email && password === defaultCredentials.admin.password) {
+      setAuthState({
+        user: demoUsers.admin,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      return { success: true };
+    }
     
-    setAuthState({
-      user: { ...user, email },
-      isAuthenticated: true,
-      isLoading: false,
-    });
+    if (email === defaultCredentials.faculty.email && password === defaultCredentials.faculty.password) {
+      setAuthState({
+        user: demoUsers.faculty,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      return { success: true };
+    }
+
+    // For other faculty accounts (created by admin), default password check
+    // In a real app, this would validate against Firebase Auth
+    if (email.includes('@') && password.length >= 6) {
+      const isFacultyEmail = !email.includes('admin');
+      setAuthState({
+        user: {
+          id: Date.now().toString(),
+          email,
+          name: email.split('@')[0].replace(/[.]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          role: isFacultyEmail ? 'faculty' : 'admin',
+          isActive: true,
+          createdAt: new Date(),
+        },
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      return { success: true };
+    }
+    
+    setAuthState((prev) => ({ ...prev, isLoading: false }));
+    return { success: false, error: 'Invalid email or password' };
   };
 
   const logout = () => {

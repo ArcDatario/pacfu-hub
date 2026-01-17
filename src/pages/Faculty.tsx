@@ -10,77 +10,29 @@ import {
   Building2,
   UserCheck,
   UserX,
-  Filter
+  MessageSquare,
+  Edit,
+  Power
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface FacultyMember {
-  id: string;
-  name: string;
-  email: string;
-  department: string;
-  position: string;
-  isActive: boolean;
-  joinedDate: string;
-  groups: string[];
-}
-
-const facultyMembers: FacultyMember[] = [
-  {
-    id: '1',
-    name: 'Dr. Maria Santos',
-    email: 'maria.santos@psau.edu.ph',
-    department: 'College of Arts and Sciences',
-    position: 'Professor III',
-    isActive: true,
-    joinedDate: 'Jan 2020',
-    groups: ['Research Committee', 'PACFU Officers'],
-  },
-  {
-    id: '2',
-    name: 'Prof. Juan Dela Cruz',
-    email: 'juan.delacruz@psau.edu.ph',
-    department: 'College of Engineering',
-    position: 'Associate Professor',
-    isActive: true,
-    joinedDate: 'Jun 2019',
-    groups: ['Curriculum Committee'],
-  },
-  {
-    id: '3',
-    name: 'Dr. Ana Reyes',
-    email: 'ana.reyes@psau.edu.ph',
-    department: 'College of Business',
-    position: 'Professor II',
-    isActive: true,
-    joinedDate: 'Mar 2021',
-    groups: ['Research Committee', 'Faculty Development'],
-  },
-  {
-    id: '4',
-    name: 'Prof. Pedro Lim',
-    email: 'pedro.lim@psau.edu.ph',
-    department: 'College of Agriculture',
-    position: 'Assistant Professor',
-    isActive: false,
-    joinedDate: 'Sep 2022',
-    groups: [],
-  },
-  {
-    id: '5',
-    name: 'Dr. Elena Cruz',
-    email: 'elena.cruz@psau.edu.ph',
-    department: 'Graduate Studies',
-    position: 'Professor IV',
-    isActive: true,
-    joinedDate: 'Aug 2018',
-    groups: ['Research Committee', 'PACFU Officers', 'Curriculum Committee'],
-  },
-];
+import { useFaculty } from '@/contexts/FacultyContext';
+import { CreateFacultyDialog } from '@/components/faculty/CreateFacultyDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 export default function Faculty() {
+  const { facultyMembers, toggleFacultyStatus } = useFaculty();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const navigate = useNavigate();
 
   const filteredFaculty = facultyMembers.filter(member => {
     const matchesSearch = 
@@ -99,6 +51,15 @@ export default function Faculty() {
   const activeCount = facultyMembers.filter(m => m.isActive).length;
   const inactiveCount = facultyMembers.filter(m => !m.isActive).length;
 
+  const handleToggleStatus = (memberId: string, memberName: string, currentStatus: boolean) => {
+    toggleFacultyStatus(memberId);
+    toast.success(`${memberName} has been ${currentStatus ? 'deactivated' : 'activated'}`);
+  };
+
+  const handleStartChat = (memberId: string) => {
+    navigate(`/messages?userId=${memberId}`);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -110,7 +71,7 @@ export default function Faculty() {
               Manage faculty accounts and group assignments
             </p>
           </div>
-          <Button variant="accent" className="gap-2">
+          <Button variant="accent" className="gap-2" onClick={() => setShowCreateDialog(true)}>
             <Plus className="h-4 w-4" />
             Add Faculty
           </Button>
@@ -245,9 +206,31 @@ export default function Faculty() {
                       {member.joinedDate}
                     </td>
                     <td className="p-4">
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-popover">
+                          <DropdownMenuItem onClick={() => handleStartChat(member.id)}>
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Send Message
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Details
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleToggleStatus(member.id, member.name, member.isActive)}
+                            className={member.isActive ? "text-destructive" : "text-success"}
+                          >
+                            <Power className="mr-2 h-4 w-4" />
+                            {member.isActive ? 'Deactivate' : 'Activate'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}
@@ -262,6 +245,8 @@ export default function Faculty() {
           )}
         </div>
       </div>
+
+      <CreateFacultyDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
     </DashboardLayout>
   );
 }
