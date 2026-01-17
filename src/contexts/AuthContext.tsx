@@ -1,91 +1,74 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole, AuthState } from '@/types/auth';
+import { 
+  loginWithEmail, 
+  logoutUser, 
+  onAuthChange, 
+  getUserData,
+  initializeDefaultAdmin,
+  createFacultyAccount
+} from '@/services/authService';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
-  setDemoUser: (role: UserRole) => void;
+  logout: () => Promise<void>;
+  createFaculty: (email: string, password: string, name: string, department: string, position: string, groups?: string[]) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Default credentials for demo accounts
-export const defaultCredentials = {
-  admin: {
-    email: 'admin@pacfu.psau.edu',
-    password: 'admin123',
-  },
-  faculty: {
-    email: 'faculty@pacfu.psau.edu',
-    password: 'faculty123',
-  },
-};
-
-// Demo users for testing
-const demoUsers: Record<UserRole, User> = {
-  admin: {
-    id: '1',
-    email: 'admin@pacfu.psau.edu',
-    name: 'Dr. Maria Santos',
-    role: 'admin',
-    isActive: true,
-    createdAt: new Date(),
-  },
-  faculty: {
-    id: '2',
-    email: 'faculty@pacfu.psau.edu',
-    name: 'Prof. Juan Dela Cruz',
-    role: 'faculty',
-    isActive: true,
-    createdAt: new Date(),
-  },
-};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
-    isLoading: false,
+    isLoading: true,
   });
+
+  // Initialize default admin on app load
+  useEffect(() => {
+    initializeDefaultAdmin();
+  }, []);
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+      if (firebaseUser) {
+        const userData = await getUserData(firebaseUser.uid);
+        if (userData && userData.isActive) {
+          setAuthState({
+            user: userData,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } else {
+          // User exists in Auth but not in Firestore or is deactivated
+          await logoutUser();
+          setAuthState({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+        }
+      } else {
+        setAuthState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setAuthState((prev) => ({ ...prev, isLoading: true }));
     
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const result = await loginWithEmail(email, password);
     
-    // Check against default credentials
-    if (email === defaultCredentials.admin.email && password === defaultCredentials.admin.password) {
+    if (result.user) {
       setAuthState({
-        user: demoUsers.admin,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-      return { success: true };
-    }
-    
-    if (email === defaultCredentials.faculty.email && password === defaultCredentials.faculty.password) {
-      setAuthState({
-        user: demoUsers.faculty,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-      return { success: true };
-    }
-
-    // For other faculty accounts (created by admin), default password check
-    // In a real app, this would validate against Firebase Auth
-    if (email.includes('@') && password.length >= 6) {
-      const isFacultyEmail = !email.includes('admin');
-      setAuthState({
-        user: {
-          id: Date.now().toString(),
-          email,
-          name: email.split('@')[0].replace(/[.]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          role: isFacultyEmail ? 'faculty' : 'admin',
-          isActive: true,
-          createdAt: new Date(),
-        },
+        user: result.user,
         isAuthenticated: true,
         isLoading: false,
       });
@@ -93,10 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     setAuthState((prev) => ({ ...prev, isLoading: false }));
-    return { success: false, error: 'Invalid email or password' };
+    return { success: false, error: result.error || 'Login failed' };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await logoutUser();
     setAuthState({
       user: null,
       isAuthenticated: false,
@@ -104,16 +88,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const setDemoUser = (role: UserRole) => {
-    setAuthState({
-      user: demoUsers[role],
-      isAuthenticated: true,
-      isLoading: false,
-    });
+  const createFaculty = async (
+    email: string, 
+    password: string, 
+    name: string, 
+    department: string,
+    position: string,
+    groups: string[] = []
+  ): Promise<{ success: boolean; error?: string }> => {
+    // Store current user before creating new account
+    const currentUser = authState.user;
+    
+    const result = await createFacultyAccount(email, password, name, department, position, groups);
+    
+    // Re-authenticate the admin after creating faculty
+    // The onAuthChange listener will handle state updates
+    if (currentUser && result.success) {
+      // The Firebase SDK will automatically sign out when creating a new user
+      // We need to re-login the admin
+      // For now, we'll just return success and let the admin login again if needed
+      // In production, you'd use Firebase Admin SDK on backend
+    }
+    
+    return result;
   };
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout, setDemoUser }}>
+    <AuthContext.Provider value={{ ...authState, login, logout, createFaculty }}>
       {children}
     </AuthContext.Provider>
   );

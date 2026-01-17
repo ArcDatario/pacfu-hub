@@ -10,7 +10,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, setDemoUser, isLoading } = useAuth();
+  const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,9 +30,17 @@ export default function Login() {
     }
   };
 
-  const handleDemoLogin = (role: 'admin' | 'faculty') => {
-    setDemoUser(role);
-    navigate('/dashboard');
+  const handleDemoLogin = async (role: 'admin' | 'faculty') => {
+    const credentials = role === 'admin' 
+      ? { email: 'admin@pacfu.psau.edu', password: 'admin123' }
+      : { email: 'faculty@pacfu.psau.edu', password: 'faculty123' };
+    
+    const result = await login(credentials.email, credentials.password);
+    if (result.success) {
+      navigate('/dashboard');
+    } else {
+      setError(result.error || 'Demo login failed. Please create the account first.');
+    }
   };
 
   return (

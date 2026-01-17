@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useFaculty } from '@/contexts/FacultyContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 interface CreateFacultyDialogProps {
@@ -62,7 +62,7 @@ const availableGroups = [
 ];
 
 export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogProps) {
-  const { addFaculty, facultyMembers } = useFaculty();
+  const { createFaculty } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -77,7 +77,6 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     if (!formData.name || !formData.email || !formData.password || !formData.department || !formData.position) {
       toast.error('Please fill in all required fields');
       return;
@@ -93,39 +92,35 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
       return;
     }
 
-    // Check if email already exists
-    if (facultyMembers.some((m) => m.email.toLowerCase() === formData.email.toLowerCase())) {
-      toast.error('A faculty member with this email already exists');
-      return;
-    }
-
     setIsLoading(true);
     
     try {
-      // In a real app, you would create the Firebase auth user here
-      // For now, we'll just add to the local state
-      addFaculty({
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        department: formData.department,
-        position: formData.position,
-        groups: formData.groups,
-      });
+      const result = await createFaculty(
+        formData.email,
+        formData.password,
+        formData.name,
+        formData.department,
+        formData.position,
+        formData.groups
+      );
 
-      toast.success(`Faculty account created for ${formData.name}`);
-      onOpenChange(false);
-      
-      // Reset form
-      setFormData({
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        department: '',
-        position: '',
-        groups: [],
-      });
+      if (result.success) {
+        toast.success(`Faculty account created for ${formData.name}`, {
+          description: 'Note: You may need to log in again as the admin.'
+        });
+        onOpenChange(false);
+        setFormData({
+          name: '',
+          email: '',
+          password: '',
+          confirmPassword: '',
+          department: '',
+          position: '',
+          groups: [],
+        });
+      } else {
+        toast.error(result.error || 'Failed to create faculty account');
+      }
     } catch (error) {
       toast.error('Failed to create faculty account');
     } finally {
