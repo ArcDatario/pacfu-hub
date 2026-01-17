@@ -11,7 +11,10 @@ import {
   Timestamp,
   getDocs,
   getDoc,
-  Unsubscribe
+  Unsubscribe,
+  deleteDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Chat, Message } from '@/types/chat';
@@ -300,5 +303,99 @@ export const getAllUsers = async (): Promise<{ id: string; name: string; email: 
   } catch (error) {
     console.error('Error fetching users:', error);
     return [];
+  }
+};
+
+// ============ GROUP CHAT CRUD OPERATIONS ============
+
+// Update group chat (admin only)
+export const updateGroupChat = async (
+  chatId: string,
+  name: string,
+  description: string
+): Promise<boolean> => {
+  try {
+    await updateDoc(doc(db, 'chats', chatId), {
+      name,
+      description,
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating group chat:', error);
+    return false;
+  }
+};
+
+// Add members to group chat (admin only)
+export const addMembersToGroup = async (
+  chatId: string,
+  memberIds: string[],
+  memberNames: Record<string, string>
+): Promise<boolean> => {
+  try {
+    // Get current chat data
+    const chatDoc = await getDoc(doc(db, 'chats', chatId));
+    if (!chatDoc.exists()) return false;
+
+    const currentParticipants = chatDoc.data().participants || [];
+    const currentParticipantNames = chatDoc.data().participantNames || {};
+
+    // Filter out members already in the group
+    const newMembers = memberIds.filter(id => !currentParticipants.includes(id));
+    
+    if (newMembers.length === 0) {
+      return true; // All members already in group
+    }
+
+    // Add new members
+    await updateDoc(doc(db, 'chats', chatId), {
+      participants: arrayUnion(...newMembers),
+      participantNames: {
+        ...currentParticipantNames,
+        ...Object.fromEntries(
+          newMembers.map(id => [id, memberNames[id] || `User ${id}`])
+        ),
+      },
+    });
+    return true;
+  } catch (error) {
+    console.error('Error adding members to group:', error);
+    return false;
+  }
+};
+
+// Remove member from group chat (admin only)
+export const removeMemberFromGroup = async (
+  chatId: string,
+  memberId: string
+): Promise<boolean> => {
+  try {
+    const chatDoc = await getDoc(doc(db, 'chats', chatId));
+    if (!chatDoc.exists()) return false;
+
+    const currentParticipantNames = chatDoc.data().participantNames || {};
+    const newParticipantNames = { ...currentParticipantNames };
+    delete newParticipantNames[memberId];
+
+    await updateDoc(doc(db, 'chats', chatId), {
+      participants: arrayRemove(memberId),
+      participantNames: newParticipantNames,
+    });
+    return true;
+  } catch (error) {
+    console.error('Error removing member from group:', error);
+    return false;
+  }
+};
+
+// Delete group chat (admin only)
+export const deleteGroupChat = async (chatId: string): Promise<boolean> => {
+  try {
+    // Delete the chat document
+    await deleteDoc(doc(db, 'chats', chatId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting group chat:', error);
+    return false;
   }
 };

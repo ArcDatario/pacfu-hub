@@ -4,17 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFaculty } from '@/contexts/FacultyContext';
-import { Plus, Search, Users, MessageSquare, MoreVertical, Loader2, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Users, MessageSquare, MoreVertical, Loader2, ArrowLeft, Edit2, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
-  subscribeToGroupChats, 
+  subscribeToGroupChats,
+  subscribeToChats,
   subscribeToMessages, 
   sendMessage, 
-  createGroupChat 
+  createGroupChat,
+  updateGroupChat,
+  deleteGroupChat,
+  addMembersToGroup,
+  removeMemberFromGroup
 } from '@/services/chatService';
 import { Chat, Message } from '@/types/chat';
 
@@ -36,25 +41,51 @@ export default function GroupChats() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingChat, setEditingChat] = useState<Chat | null>(null);
+  const [editGroupName, setEditGroupName] = useState('');
+  const [editGroupDescription, setEditGroupDescription] = useState('');
+  const [editingMembers, setEditingMembers] = useState<string[]>([]);
+  const [updatingGroup, setUpdatingGroup] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unsubscribeChatsRef = useRef<(() => void) | null>(null);
   const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
 
-  // Subscribe to group chats
+  // Subscribe to group chats (admin sees all, faculty sees only assigned)
   useEffect(() => {
-    setLoadingChats(true);
-    const unsubscribe = subscribeToGroupChats((chats) => {
-      setGroupChats(chats);
+    if (!user) {
+      setGroupChats([]);
       setLoadingChats(false);
-    });
+      return;
+    }
 
-    unsubscribeChatsRef.current = unsubscribe;
+    setLoadingChats(true);
+
+    if (isAdmin) {
+      // Admin sees all group chats
+      const unsubscribe = subscribeToGroupChats((chats) => {
+        setGroupChats(chats);
+        setLoadingChats(false);
+      });
+      unsubscribeChatsRef.current = unsubscribe;
+    } else {
+      // Faculty only sees groups they are assigned to
+      const unsubscribe = subscribeToChats(user.id, (chats) => {
+        // Filter to only group chats
+        const groupChats = chats.filter(chat => chat.type === 'group');
+        setGroupChats(groupChats);
+        setLoadingChats(false);
+      });
+      unsubscribeChatsRef.current = unsubscribe;
+    }
+
     return () => {
       if (unsubscribeChatsRef.current) {
         unsubscribeChatsRef.current();
       }
     };
-  }, []);
+  }, [user, isAdmin]);
 
   // Subscribe to messages when chat is selected
   useEffect(() => {
@@ -155,6 +186,78 @@ export default function GroupChats() {
     }
   };
 
+  const handleOpenEdit = (chat: Chat) => {
+    setEditingChat(chat);
+    setEditGroupName(chat.name);
+    setEditGroupDescription(chat.description || '');
+    setEditingMembers(chat.participants);
+    setShowEditDialog(true);
+  };
+
+  const handleUpdateGroup = async () => {
+    if (!editingChat) return;
+
+    setUpdatingGroup(true);
+    try {
+      // Update group basic info
+      const updated = await updateGroupChat(
+        editingChat.id,
+        editGroupName,
+        editGroupDescription
+      );
+
+      if (updated) {
+        // Add new members
+        const newMembers = editingMembers.filter(
+          id => !editingChat.participants.includes(id)
+        );
+        
+        if (newMembers.length > 0) {
+          const memberNames = facultyMembers
+            .filter(m => newMembers.includes(m.id))
+            .reduce((acc, m) => {
+              acc[m.id] = m.name;
+              return acc;
+            }, {} as Record<string, string>);
+
+          await addMembersToGroup(editingChat.id, newMembers, memberNames);
+        }
+
+        // Remove members
+        const removedMembers = editingChat.participants.filter(
+          id => !editingMembers.includes(id) && id !== editingChat.createdBy
+        );
+        
+        for (const memberId of removedMembers) {
+          await removeMemberFromGroup(editingChat.id, memberId);
+        }
+
+        setShowEditDialog(false);
+        setEditingChat(null);
+      }
+    } catch (error) {
+      console.error('Error updating group:', error);
+    }
+    setUpdatingGroup(false);
+  };
+
+  const handleDeleteGroup = async (chatId: string) => {
+    if (!window.confirm('Are you sure you want to delete this group chat? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingGroupId(chatId);
+    try {
+      const deleted = await deleteGroupChat(chatId);
+      if (deleted && selectedChat?.id === chatId) {
+        setSelectedChat(null);
+      }
+    } catch (error) {
+      console.error('Error deleting group:', error);
+    }
+    setDeletingGroupId(null);
+  };
+
   return (
     <DashboardLayout>
       <div className="flex h-[calc(100vh-7rem)] gap-6">
@@ -247,6 +350,99 @@ export default function GroupChats() {
                   </DialogContent>
                 </Dialog>
               )}
+
+              {isAdmin && (
+                <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Edit Group Chat</DialogTitle>
+                      <DialogDescription>
+                        Update group name, description, and members
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="edit-group-name">Group Name</Label>
+                        <Input
+                          id="edit-group-name"
+                          placeholder="e.g., Research Committee"
+                          value={editGroupName}
+                          onChange={(e) => setEditGroupName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-group-desc">Description</Label>
+                        <Input
+                          id="edit-group-desc"
+                          placeholder="e.g., Discussions on research"
+                          value={editGroupDescription}
+                          onChange={(e) => setEditGroupDescription(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-3 block">Members</Label>
+                        <ScrollArea className="h-48 border rounded-lg p-4">
+                          <div className="space-y-2">
+                            {facultyMembers
+                              .filter(m => m.isActive)
+                              .map(member => (
+                                <div key={member.id} className="flex items-center gap-2">
+                                  <Checkbox
+                                    id={`edit-member-${member.id}`}
+                                    checked={editingMembers.includes(member.id)}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setEditingMembers([...editingMembers, member.id]);
+                                      } else {
+                                        setEditingMembers(
+                                          editingMembers.filter(id => id !== member.id)
+                                        );
+                                      }
+                                    }}
+                                    disabled={member.id === editingChat?.createdBy}
+                                  />
+                                  <label
+                                    htmlFor={`edit-member-${member.id}`}
+                                    className="text-sm font-medium cursor-pointer"
+                                  >
+                                    {member.name}
+                                    {member.id === editingChat?.createdBy && (
+                                      <span className="text-xs text-muted-foreground ml-2">(Creator)</span>
+                                    )}
+                                  </label>
+                                </div>
+                              ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowEditDialog(false)}
+                          disabled={updatingGroup}
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleUpdateGroup}
+                          disabled={!editGroupName.trim() || updatingGroup}
+                          className="flex-1"
+                        >
+                          {updatingGroup ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              Updating...
+                            </>
+                          ) : (
+                            'Update Group'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -275,7 +471,7 @@ export default function GroupChats() {
                   key={chat.id}
                   onClick={() => setSelectedChat(chat)}
                   className={cn(
-                    "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b",
+                    "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b group",
                     selectedChat?.id === chat.id && "bg-muted"
                   )}
                 >
@@ -300,6 +496,35 @@ export default function GroupChats() {
                           <Users className="h-3 w-3" />
                           {chat.participants.length}
                         </span>
+                        {isAdmin && (
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEdit(chat);
+                              }}
+                              className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+                              title="Edit group"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteGroup(chat.id);
+                              }}
+                              disabled={deletingGroupId === chat.id}
+                              className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
+                              title="Delete group"
+                            >
+                              {deletingGroupId === chat.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
