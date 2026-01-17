@@ -22,11 +22,11 @@ export default function Login() {
       return;
     }
     
-    try {
-      await login(email, password);
+    const result = await login(email, password);
+    if (result.success) {
       navigate('/dashboard');
-    } catch (err) {
-      setError('Invalid credentials');
+    } else {
+      setError(result.error || 'Invalid credentials');
     }
   };
 
