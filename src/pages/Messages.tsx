@@ -13,165 +13,114 @@ import {
   MoreVertical,
   Send,
   User,
-  ArrowLeft
+  ArrowLeft,
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
-interface ChatMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  timestamp: Date;
-}
-
-interface Conversation {
-  id: string;
-  type: 'direct' | 'group';
-  name: string;
-  participants: string[];
-  avatar: string;
-  lastMessage?: string;
-  lastMessageTime?: Date;
-  unreadCount: number;
-  messages: ChatMessage[];
-}
+import { 
+  subscribeToChats, 
+  subscribeToMessages, 
+  sendMessage, 
+  createDirectChat 
+} from '@/services/chatService';
+import { Chat, Message } from '@/types/chat';
 
 export default function Messages() {
   const { user } = useAuth();
   const { facultyMembers } = useFaculty();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [conversations, setConversations] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [messageInput, setMessageInput] = useState('');
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [loadingChats, setLoadingChats] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const unsubscribeChatsRef = useRef<(() => void) | null>(null);
+  const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
 
-  // Initialize some demo conversations
+  // Subscribe to chats
   useEffect(() => {
-    const demoConversations: Conversation[] = [
-      {
-        id: 'group-1',
-        type: 'group',
-        name: 'Research Committee',
-        participants: ['1', '2', '3'],
-        avatar: 'R',
-        lastMessage: 'The next deadline is on the 20th',
-        lastMessageTime: new Date(Date.now() - 5 * 60000),
-        unreadCount: 3,
-        messages: [
-          { id: '1', senderId: '3', senderName: 'Dr. Ana Reyes', content: 'Good morning everyone!', timestamp: new Date(Date.now() - 60 * 60000) },
-          { id: '2', senderId: '1', senderName: 'Dr. Maria Santos', content: 'Hello! Ready for the meeting?', timestamp: new Date(Date.now() - 55 * 60000) },
-          { id: '3', senderId: '3', senderName: 'Dr. Ana Reyes', content: 'The next deadline is on the 20th', timestamp: new Date(Date.now() - 5 * 60000) },
-        ],
-      },
-      {
-        id: 'group-2',
-        type: 'group',
-        name: 'PACFU Officers',
-        participants: ['1', '5'],
-        avatar: 'P',
-        lastMessage: 'Budget proposal attached',
-        lastMessageTime: new Date(Date.now() - 3 * 60 * 60000),
-        unreadCount: 0,
-        messages: [
-          { id: '1', senderId: '5', senderName: 'Dr. Elena Cruz', content: 'Budget proposal attached', timestamp: new Date(Date.now() - 3 * 60 * 60000) },
-        ],
-      },
-      {
-        id: 'direct-2',
-        type: 'direct',
-        name: 'Prof. Juan Dela Cruz',
-        participants: ['1', '2'],
-        avatar: 'J',
-        lastMessage: 'Thanks for the update!',
-        lastMessageTime: new Date(Date.now() - 2 * 60 * 60000),
-        unreadCount: 1,
-        messages: [
-          { id: '1', senderId: '2', senderName: 'Prof. Juan Dela Cruz', content: 'Hi, do you have the latest report?', timestamp: new Date(Date.now() - 3 * 60 * 60000) },
-          { id: '2', senderId: '1', senderName: 'Dr. Maria Santos', content: 'Yes, I\'ll send it over.', timestamp: new Date(Date.now() - 2.5 * 60 * 60000) },
-          { id: '3', senderId: '2', senderName: 'Prof. Juan Dela Cruz', content: 'Thanks for the update!', timestamp: new Date(Date.now() - 2 * 60 * 60000) },
-        ],
-      },
-    ];
-    setConversations(demoConversations);
+    if (!user) {
+      setConversations([]);
+      setLoadingChats(false);
+      return;
+    }
 
-    // Check if we should open a direct message
+    setLoadingChats(true);
+    const unsubscribe = subscribeToChats(user.id, (chats) => {
+      setConversations(chats);
+      setLoadingChats(false);
+    });
+
+    unsubscribeChatsRef.current = unsubscribe;
+    return () => {
+      if (unsubscribeChatsRef.current) {
+        unsubscribeChatsRef.current();
+      }
+    };
+  }, [user]);
+
+  // Subscribe to messages when chat is selected
+  useEffect(() => {
+    if (!selectedChat) {
+      setMessages([]);
+      return;
+    }
+
+    setLoadingMessages(true);
+    const unsubscribe = subscribeToMessages(selectedChat.id, (msgs) => {
+      setMessages(msgs);
+      setLoadingMessages(false);
+    });
+
+    unsubscribeMessagesRef.current = unsubscribe;
+    return () => {
+      if (unsubscribeMessagesRef.current) {
+        unsubscribeMessagesRef.current();
+      }
+    };
+  }, [selectedChat]);
+
+  // Handle deep link to specific user
+  useEffect(() => {
     const userId = searchParams.get('userId');
-    if (userId) {
+    if (userId && user && !selectedChat) {
       const member = facultyMembers.find(m => m.id === userId);
       if (member) {
-        // Check if conversation exists
-        const existing = demoConversations.find(
-          c => c.type === 'direct' && c.participants.includes(userId)
-        );
-        if (existing) {
-          setSelectedConversation(existing);
-        } else {
-          // Create new conversation
-          const newConvo: Conversation = {
-            id: `direct-${userId}`,
-            type: 'direct',
-            name: member.name,
-            participants: [user?.id || '1', userId],
-            avatar: member.name.charAt(0),
-            unreadCount: 0,
-            messages: [],
-          };
-          setConversations(prev => [newConvo, ...prev]);
-          setSelectedConversation(newConvo);
-        }
+        startNewDirectChat(userId);
       }
     }
-  }, [searchParams, facultyMembers, user]);
+  }, [searchParams, facultyMembers, user, selectedChat]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedConversation?.messages]);
+  }, [messages]);
 
   const filteredConversations = conversations.filter(conv =>
     conv.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSendMessage = () => {
-    if (!messageInput.trim() || !selectedConversation || !user) return;
+  const handleSendMessage = async () => {
+    if (!messageInput.trim() || !selectedChat || !user) return;
 
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      senderId: user.id,
-      senderName: user.name,
-      content: messageInput.trim(),
-      timestamp: new Date(),
-    };
-
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === selectedConversation.id
-          ? {
-              ...conv,
-              messages: [...conv.messages, newMessage],
-              lastMessage: newMessage.content,
-              lastMessageTime: newMessage.timestamp,
-            }
-          : conv
-      )
+    setSendingMessage(true);
+    const success = await sendMessage(
+      selectedChat.id,
+      user.id,
+      user.name,
+      messageInput.trim()
     );
 
-    setSelectedConversation(prev =>
-      prev
-        ? {
-            ...prev,
-            messages: [...prev.messages, newMessage],
-            lastMessage: newMessage.content,
-            lastMessageTime: newMessage.timestamp,
-          }
-        : null
-    );
-
-    setMessageInput('');
+    if (success) {
+      setMessageInput('');
+    }
+    setSendingMessage(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -196,9 +145,9 @@ export default function Messages() {
     m => m.id !== user?.id && m.isActive
   );
 
-  const startNewDirectChat = (memberId: string) => {
+  const startNewDirectChat = async (memberId: string) => {
     const member = facultyMembers.find(m => m.id === memberId);
-    if (!member) return;
+    if (!member || !user) return;
 
     // Check if conversation exists
     const existing = conversations.find(
@@ -206,19 +155,27 @@ export default function Messages() {
     );
     
     if (existing) {
-      setSelectedConversation(existing);
+      setSelectedChat(existing);
     } else {
-      const newConvo: Conversation = {
-        id: `direct-${memberId}`,
-        type: 'direct',
-        name: member.name,
-        participants: [user?.id || '1', memberId],
-        avatar: member.name.charAt(0),
-        unreadCount: 0,
-        messages: [],
-      };
-      setConversations(prev => [newConvo, ...prev]);
-      setSelectedConversation(newConvo);
+      // Create new direct chat in Firebase
+      const chatId = await createDirectChat(user.id, user.name, memberId, member.name);
+      if (chatId) {
+        const newChat: Chat = {
+          id: chatId,
+          type: 'direct',
+          name: member.name,
+          participants: [user.id, memberId],
+          participantNames: {
+            [user.id]: user.name,
+            [memberId]: member.name,
+          },
+          createdBy: user.id,
+          createdAt: new Date(),
+          avatar: member.name.charAt(0).toUpperCase(),
+        };
+        setSelectedChat(newChat);
+        setConversations(prev => [newChat, ...prev]);
+      }
     }
     setShowNewChat(false);
   };
@@ -229,7 +186,7 @@ export default function Messages() {
         {/* Conversation List */}
         <div className={cn(
           "w-80 flex-shrink-0 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
-          selectedConversation && "hidden md:flex"
+          selectedChat && "hidden md:flex"
         )}>
           <div className="p-4 border-b">
             <div className="flex items-center justify-between mb-4">
@@ -275,54 +232,60 @@ export default function Messages() {
           )}
           
           <ScrollArea className="flex-1">
-            {filteredConversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => setSelectedConversation(conv)}
-                className={cn(
-                  "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b",
-                  selectedConversation?.id === conv.id && "bg-muted"
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full font-medium",
-                    conv.type === 'group' 
-                      ? "bg-primary text-primary-foreground" 
-                      : "bg-accent text-accent-foreground"
-                  )}>
-                    {conv.type === 'group' ? <Users className="h-5 w-5" /> : conv.avatar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-card-foreground truncate">
-                        {conv.name}
-                      </p>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTime(conv.lastMessageTime)}
-                      </span>
+            {loadingChats ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <MessageSquare className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                <p className="text-sm text-muted-foreground">No conversations yet</p>
+              </div>
+            ) : (
+              filteredConversations.map((conv) => (
+                <button
+                  key={conv.id}
+                  onClick={() => setSelectedChat(conv)}
+                  className={cn(
+                    "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b",
+                    selectedChat?.id === conv.id && "bg-muted"
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full font-medium",
+                      conv.type === 'group' 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-accent text-accent-foreground"
+                    )}>
+                      {conv.type === 'group' ? <Users className="h-5 w-5" /> : conv.avatar}
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {conv.lastMessage || 'No messages yet'}
-                    </p>
-                    {conv.unreadCount > 0 && (
-                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground px-1.5 mt-1">
-                        {conv.unreadCount}
-                      </span>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-card-foreground truncate">
+                          {conv.name}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(conv.lastMessageTime)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {conv.lastMessage || 'No messages yet'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))
+            )}
           </ScrollArea>
         </div>
 
         {/* Chat Area */}
         <div className={cn(
           "flex-1 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
-          !selectedConversation && "hidden md:flex"
+          !selectedChat && "hidden md:flex"
         )}>
-          {selectedConversation ? (
+          {selectedChat ? (
             <>
               {/* Chat Header */}
               <div className="flex items-center justify-between p-4 border-b">
@@ -331,28 +294,28 @@ export default function Messages() {
                     variant="ghost" 
                     size="icon" 
                     className="md:hidden"
-                    onClick={() => setSelectedConversation(null)}
+                    onClick={() => setSelectedChat(null)}
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                   <div className={cn(
                     "flex h-10 w-10 items-center justify-center rounded-full font-medium",
-                    selectedConversation.type === 'group'
+                    selectedChat.type === 'group'
                       ? "bg-primary text-primary-foreground"
                       : "bg-accent text-accent-foreground"
                   )}>
-                    {selectedConversation.type === 'group' 
+                    {selectedChat.type === 'group' 
                       ? <Users className="h-5 w-5" /> 
-                      : selectedConversation.avatar
+                      : selectedChat.avatar
                     }
                   </div>
                   <div>
                     <h3 className="font-medium text-card-foreground">
-                      {selectedConversation.name}
+                      {selectedChat.name}
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      {selectedConversation.type === 'group' 
-                        ? `${selectedConversation.participants.length} members`
+                      {selectedChat.type === 'group' 
+                        ? `${selectedChat.participants.length} members`
                         : 'Direct message'
                       }
                     </p>
@@ -366,7 +329,11 @@ export default function Messages() {
               {/* Messages Area */}
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4">
-                  {selectedConversation.messages.length === 0 ? (
+                  {loadingMessages ? (
+                    <div className="flex flex-col items-center justify-center h-full py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full py-12 text-center">
                       <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-muted-foreground">
@@ -377,7 +344,7 @@ export default function Messages() {
                       </p>
                     </div>
                   ) : (
-                    selectedConversation.messages.map((message) => {
+                    messages.map((message) => {
                       const isOwn = message.senderId === user?.id;
                       return (
                         <div
@@ -393,7 +360,7 @@ export default function Messages() {
                               ? "bg-primary text-primary-foreground rounded-br-md" 
                               : "bg-muted rounded-bl-md"
                           )}>
-                            {!isOwn && selectedConversation.type === 'group' && (
+                            {!isOwn && selectedChat.type === 'group' && (
                               <p className="text-xs font-medium mb-1 opacity-70">
                                 {message.senderName}
                               </p>
@@ -422,10 +389,18 @@ export default function Messages() {
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyPress={handleKeyPress}
+                    disabled={sendingMessage}
                     className="flex-1"
                   />
-                  <Button onClick={handleSendMessage} disabled={!messageInput.trim()}>
-                    <Send className="h-4 w-4" />
+                  <Button 
+                    onClick={handleSendMessage} 
+                    disabled={!messageInput.trim() || sendingMessage}
+                  >
+                    {sendingMessage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               </div>

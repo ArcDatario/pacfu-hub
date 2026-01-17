@@ -1,97 +1,251 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Search, Users, MessageSquare, MoreVertical } from 'lucide-react';
+import { useFaculty } from '@/contexts/FacultyContext';
+import { Plus, Search, Users, MessageSquare, MoreVertical, Loader2, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface GroupChat {
-  id: string;
-  name: string;
-  description: string;
-  memberCount: number;
-  lastMessage: string;
-  lastMessageTime: string;
-  unreadCount: number;
-  avatar: string;
-}
-
-const groupChats: GroupChat[] = [
-  {
-    id: '1',
-    name: 'Research Committee',
-    description: 'Discussions on research initiatives and publications',
-    memberCount: 15,
-    lastMessage: 'The next deadline is on the 20th',
-    lastMessageTime: '5m ago',
-    unreadCount: 3,
-    avatar: 'R',
-  },
-  {
-    id: '2',
-    name: 'College of Engineering',
-    description: 'Engineering department faculty group',
-    memberCount: 28,
-    lastMessage: 'Meeting rescheduled to 3 PM',
-    lastMessageTime: '1h ago',
-    unreadCount: 0,
-    avatar: 'E',
-  },
-  {
-    id: '3',
-    name: 'Curriculum Committee',
-    description: 'Curriculum development and review',
-    memberCount: 12,
-    lastMessage: 'Please review the updated syllabus',
-    lastMessageTime: '2h ago',
-    unreadCount: 1,
-    avatar: 'C',
-  },
-  {
-    id: '4',
-    name: 'PACFU Officers',
-    description: 'Official channel for PACFU officers',
-    memberCount: 8,
-    lastMessage: 'Budget proposal attached',
-    lastMessageTime: '3h ago',
-    unreadCount: 5,
-    avatar: 'P',
-  },
-  {
-    id: '5',
-    name: 'Faculty Development',
-    description: 'Professional development opportunities',
-    memberCount: 45,
-    lastMessage: 'Workshop registration is now open',
-    lastMessageTime: '1d ago',
-    unreadCount: 0,
-    avatar: 'F',
-  },
-];
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  subscribeToGroupChats, 
+  subscribeToMessages, 
+  sendMessage, 
+  createGroupChat 
+} from '@/services/chatService';
+import { Chat, Message } from '@/types/chat';
 
 export default function GroupChats() {
   const { user } = useAuth();
+  const { facultyMembers } = useFaculty();
   const isAdmin = user?.role === 'admin';
+  
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedChat, setSelectedChat] = useState<GroupChat | null>(null);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [groupChats, setGroupChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messageInput, setMessageInput] = useState('');
+  const [loadingChats, setLoadingChats] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const unsubscribeChatsRef = useRef<(() => void) | null>(null);
+  const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
+
+  // Subscribe to group chats
+  useEffect(() => {
+    setLoadingChats(true);
+    const unsubscribe = subscribeToGroupChats((chats) => {
+      setGroupChats(chats);
+      setLoadingChats(false);
+    });
+
+    unsubscribeChatsRef.current = unsubscribe;
+    return () => {
+      if (unsubscribeChatsRef.current) {
+        unsubscribeChatsRef.current();
+      }
+    };
+  }, []);
+
+  // Subscribe to messages when chat is selected
+  useEffect(() => {
+    if (!selectedChat) {
+      setMessages([]);
+      return;
+    }
+
+    setLoadingMessages(true);
+    const unsubscribe = subscribeToMessages(selectedChat.id, (msgs) => {
+      setMessages(msgs);
+      setLoadingMessages(false);
+    });
+
+    unsubscribeMessagesRef.current = unsubscribe;
+    return () => {
+      if (unsubscribeMessagesRef.current) {
+        unsubscribeMessagesRef.current();
+      }
+    };
+  }, [selectedChat]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const filteredChats = groupChats.filter(chat =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const formatTime = (date?: Date) => {
+    if (!date) return '';
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    
+    if (diff < 60000) return 'now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim() || !user) return;
+
+    setCreatingGroup(true);
+    try {
+      const participantNames = selectedMembers.reduce((acc, memberId) => {
+        const member = facultyMembers.find(m => m.id === memberId);
+        if (member) {
+          acc[memberId] = member.name;
+        }
+        return acc;
+      }, {} as Record<string, string>);
+
+      const chatId = await createGroupChat(
+        newGroupName,
+        newGroupDescription,
+        user.id,
+        user.name,
+        selectedMembers,
+        participantNames
+      );
+
+      if (chatId) {
+        setNewGroupName('');
+        setNewGroupDescription('');
+        setSelectedMembers([]);
+        setShowCreateDialog(false);
+      }
+    } catch (error) {
+      console.error('Error creating group:', error);
+    }
+    setCreatingGroup(false);
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageInput.trim() || !selectedChat || !user) return;
+
+    setSendingMessage(true);
+    const success = await sendMessage(
+      selectedChat.id,
+      user.id,
+      user.name,
+      messageInput.trim()
+    );
+
+    if (success) {
+      setMessageInput('');
+    }
+    setSendingMessage(false);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="flex h-[calc(100vh-7rem)] gap-6">
         {/* Chat List */}
-        <div className="w-80 flex-shrink-0 flex flex-col rounded-xl bg-card shadow-card overflow-hidden">
+        <div className={cn(
+          "w-80 flex-shrink-0 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
+          selectedChat && "hidden md:flex"
+        )}>
           <div className="p-4 border-b">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold">Group Chats</h2>
               {isAdmin && (
-                <Button variant="ghost" size="icon">
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Create Group Chat</DialogTitle>
+                      <DialogDescription>
+                        Create a new group chat with selected members
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="group-name">Group Name</Label>
+                        <Input
+                          id="group-name"
+                          placeholder="e.g., Research Committee"
+                          value={newGroupName}
+                          onChange={(e) => setNewGroupName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="group-desc">Description (Optional)</Label>
+                        <Input
+                          id="group-desc"
+                          placeholder="e.g., Discussions on research"
+                          value={newGroupDescription}
+                          onChange={(e) => setNewGroupDescription(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-3 block">Select Members</Label>
+                        <ScrollArea className="h-48 border rounded-lg p-4">
+                          <div className="space-y-2">
+                            {facultyMembers
+                              .filter(m => m.id !== user?.id && m.isActive)
+                              .map(member => (
+                                <div key={member.id} className="flex items-center gap-2">
+                                  <Checkbox
+                                    id={`member-${member.id}`}
+                                    checked={selectedMembers.includes(member.id)}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedMembers([...selectedMembers, member.id]);
+                                      } else {
+                                        setSelectedMembers(selectedMembers.filter(id => id !== member.id));
+                                      }
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`member-${member.id}`}
+                                    className="text-sm font-medium cursor-pointer"
+                                  >
+                                    {member.name}
+                                  </label>
+                                </div>
+                              ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                      <Button
+                        onClick={handleCreateGroup}
+                        disabled={!newGroupName.trim() || selectedMembers.length === 0 || creatingGroup}
+                        className="w-full"
+                      >
+                        {creatingGroup ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Creating...
+                          </>
+                        ) : (
+                          'Create Group'
+                        )}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               )}
             </div>
             <div className="relative">
@@ -105,57 +259,74 @@ export default function GroupChats() {
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto">
-            {filteredChats.map((chat) => (
-              <button
-                key={chat.id}
-                onClick={() => setSelectedChat(chat)}
-                className={cn(
-                  "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b",
-                  selectedChat?.id === chat.id && "bg-muted"
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-medium">
-                    {chat.avatar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-card-foreground truncate">
-                        {chat.name}
-                      </p>
-                      <span className="text-xs text-muted-foreground">
-                        {chat.lastMessageTime}
-                      </span>
+          <ScrollArea className="flex-1">
+            {loadingChats ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredChats.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <Users className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                <p className="text-sm text-muted-foreground">No group chats yet</p>
+              </div>
+            ) : (
+              filteredChats.map((chat) => (
+                <button
+                  key={chat.id}
+                  onClick={() => setSelectedChat(chat)}
+                  className={cn(
+                    "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b",
+                    selectedChat?.id === chat.id && "bg-muted"
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-medium">
+                      {chat.avatar}
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {chat.lastMessage}
-                    </p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Users className="h-3 w-3" />
-                        {chat.memberCount}
-                      </span>
-                      {chat.unreadCount > 0 && (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground px-1.5">
-                          {chat.unreadCount}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-card-foreground truncate">
+                          {chat.name}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(chat.lastMessageTime)}
                         </span>
-                      )}
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {chat.lastMessage || 'No messages yet'}
+                      </p>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Users className="h-3 w-3" />
+                          {chat.participants.length}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))
+            )}
+          </ScrollArea>
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col rounded-xl bg-card shadow-card overflow-hidden">
+        <div className={cn(
+          "flex-1 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
+          !selectedChat && "hidden md:flex"
+        )}>
           {selectedChat ? (
             <>
               {/* Chat Header */}
               <div className="flex items-center justify-between p-4 border-b">
                 <div className="flex items-center gap-3">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="md:hidden"
+                    onClick={() => setSelectedChat(null)}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-medium">
                     {selectedChat.avatar}
                   </div>
@@ -164,7 +335,7 @@ export default function GroupChats() {
                       {selectedChat.name}
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      {selectedChat.memberCount} members
+                      {selectedChat.participants.length} members
                     </p>
                   </div>
                 </div>
@@ -174,26 +345,79 @@ export default function GroupChats() {
               </div>
 
               {/* Messages Area */}
-              <div className="flex-1 p-4 overflow-y-auto bg-muted/30">
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground">
-                    Select a conversation to start messaging
-                  </p>
-                  <p className="text-sm text-muted-foreground/70 mt-1">
-                    Messages will appear here
-                  </p>
+              <ScrollArea className="flex-1 p-4">
+                <div className="space-y-4">
+                  {loadingMessages ? (
+                    <div className="flex flex-col items-center justify-center h-full py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                      <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                      <p className="text-muted-foreground">No messages yet</p>
+                      <p className="text-sm text-muted-foreground/70 mt-1">
+                        Start the conversation!
+                      </p>
+                    </div>
+                  ) : (
+                    messages.map((message) => {
+                      const isOwn = message.senderId === user?.id;
+                      return (
+                        <div
+                          key={message.id}
+                          className={cn(
+                            "flex",
+                            isOwn ? "justify-end" : "justify-start"
+                          )}
+                        >
+                          <div className={cn(
+                            "max-w-[70%] rounded-2xl px-4 py-2",
+                            isOwn 
+                              ? "bg-primary text-primary-foreground rounded-br-md" 
+                              : "bg-muted rounded-bl-md"
+                          )}>
+                            {!isOwn && (
+                              <p className="text-xs font-medium mb-1 opacity-70">
+                                {message.senderName}
+                              </p>
+                            )}
+                            <p className="text-sm">{message.content}</p>
+                            <p className={cn(
+                              "text-xs mt-1",
+                              isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                            )}>
+                              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
-              </div>
+              </ScrollArea>
 
               {/* Message Input */}
               <div className="p-4 border-t">
                 <div className="flex gap-2">
                   <Input
                     placeholder="Type a message..."
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    disabled={sendingMessage}
                     className="flex-1"
                   />
-                  <Button>Send</Button>
+                  <Button 
+                    onClick={handleSendMessage} 
+                    disabled={!messageInput.trim() || sendingMessage}
+                  >
+                    {sendingMessage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      'Send'
+                    )}
+                  </Button>
                 </div>
               </div>
             </>
