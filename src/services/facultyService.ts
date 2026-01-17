@@ -1,0 +1,90 @@
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  updateDoc,
+  onSnapshot,
+  orderBy
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { FacultyMember } from '@/types/faculty';
+
+// Get all faculty members from Firestore
+export const getAllFaculty = async (): Promise<FacultyMember[]> => {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('role', '==', 'faculty'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        email: data.email,
+        department: data.department || 'Not Assigned',
+        position: data.position || 'Faculty',
+        isActive: data.isActive,
+        joinedDate: data.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
+        groups: data.groups || [],
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching faculty:', error);
+    return [];
+  }
+};
+
+// Subscribe to faculty changes
+export const subscribeFaculty = (callback: (faculty: FacultyMember[]) => void) => {
+  const usersRef = collection(db, 'users');
+  const q = query(usersRef, where('role', '==', 'faculty'));
+  
+  return onSnapshot(q, (snapshot) => {
+    const faculty = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        email: data.email,
+        department: data.department || 'Not Assigned',
+        position: data.position || 'Faculty',
+        isActive: data.isActive,
+        joinedDate: data.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
+        groups: data.groups || [],
+      };
+    });
+    callback(faculty);
+  });
+};
+
+// Toggle faculty active status
+export const toggleFacultyActive = async (userId: string, currentStatus: boolean): Promise<boolean> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      isActive: !currentStatus,
+    });
+    return true;
+  } catch (error) {
+    console.error('Error toggling faculty status:', error);
+    return false;
+  }
+};
+
+// Update faculty details
+export const updateFacultyDetails = async (
+  userId: string, 
+  data: Partial<{ name: string; department: string; groups: string[] }>
+): Promise<boolean> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, data);
+    return true;
+  } catch (error) {
+    console.error('Error updating faculty:', error);
+    return false;
+  }
+};
