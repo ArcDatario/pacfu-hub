@@ -12,7 +12,9 @@ import {
   collection, 
   query, 
   where, 
-  getDocs 
+  getDocs,
+  updateDoc,
+  arrayUnion
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { User, UserRole } from '@/types/auth';
@@ -175,6 +177,27 @@ export const createFacultyAccount = async (
       isActive: true,
       createdAt: new Date(),
     });
+
+    // Add faculty to group chats' participants
+    if (groups && groups.length > 0) {
+      const chatsRef = collection(db, 'chats');
+      const q = query(chatsRef, where('type', '==', 'group'));
+      const chatsSnapshot = await getDocs(q);
+      
+      for (const chatDoc of chatsSnapshot.docs) {
+        const chatData = chatDoc.data();
+        // If the group name matches one of the faculty's assigned groups
+        if (groups.includes(chatData.name)) {
+          await updateDoc(chatDoc.ref, {
+            participants: arrayUnion(userCredential.user.uid),
+            participantNames: {
+              ...chatData.participantNames,
+              [userCredential.user.uid]: name,
+            },
+          });
+        }
+      }
+    }
     
     return { success: true, userId: userCredential.user.uid };
   } catch (error: any) {

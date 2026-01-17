@@ -6,7 +6,9 @@ import {
   doc, 
   updateDoc,
   onSnapshot,
-  orderBy
+  orderBy,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { FacultyMember } from '@/types/faculty';
@@ -77,10 +79,47 @@ export const toggleFacultyActive = async (userId: string, currentStatus: boolean
 // Update faculty details
 export const updateFacultyDetails = async (
   userId: string, 
-  data: Partial<{ name: string; department: string; groups: string[] }>
+  data: Partial<{ name: string; department: string; groups: string[] }>,
+  oldFacultyData?: FacultyMember
 ): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
+    
+    // If groups are being updated, update chat participants
+    if (data.groups && oldFacultyData) {
+      const chatsRef = collection(db, 'chats');
+      const q = query(chatsRef, where('type', '==', 'group'));
+      const chatsSnapshot = await getDocs(q);
+      
+      for (const chatDoc of chatsSnapshot.docs) {
+        const chatData = chatDoc.data();
+        const isInOldGroups = oldFacultyData.groups.includes(chatData.name);
+        const isInNewGroups = data.groups.includes(chatData.name);
+        
+        // Remove from old groups they're no longer assigned to
+        if (isInOldGroups && !isInNewGroups) {
+          const newParticipantNames = { ...chatData.participantNames };
+          delete newParticipantNames[userId];
+          
+          await updateDoc(chatDoc.ref, {
+            participants: arrayRemove(userId),
+            participantNames: newParticipantNames,
+          });
+        }
+        
+        // Add to new groups they're now assigned to
+        if (!isInOldGroups && isInNewGroups) {
+          await updateDoc(chatDoc.ref, {
+            participants: arrayUnion(userId),
+            participantNames: {
+              ...chatData.participantNames,
+              [userId]: data.name || oldFacultyData.name,
+            },
+          });
+        }
+      }
+    }
+    
     await updateDoc(userRef, data);
     return true;
   } catch (error) {

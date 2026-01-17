@@ -160,6 +160,9 @@ export default function Messages() {
       // Create new direct chat in Firebase
       const chatId = await createDirectChat(user.id, user.name, memberId, member.name);
       if (chatId) {
+        // Don't manually add to state - let Firebase subscription handle it
+        // Just select the chat and close the dialog
+        // The subscription will pick it up automatically
         const newChat: Chat = {
           id: chatId,
           type: 'direct',
@@ -174,7 +177,12 @@ export default function Messages() {
           avatar: member.name.charAt(0).toUpperCase(),
         };
         setSelectedChat(newChat);
-        setConversations(prev => [newChat, ...prev]);
+        // Add to conversations state so it appears immediately
+        setConversations(prev => {
+          // Check if it already exists (in case subscription updates during creation)
+          const exists = prev.some(c => c.id === chatId);
+          return exists ? prev : [newChat, ...prev];
+        });
       }
     }
     setShowNewChat(false);

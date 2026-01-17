@@ -4,12 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFaculty } from '@/contexts/FacultyContext';
-import { Plus, Search, Users, MessageSquare, MoreVertical, Loader2, ArrowLeft, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Search, Users, MessageSquare, MoreVertical, Loader2, ArrowLeft, Edit2, Trash2, X, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { 
   subscribeToGroupChats,
   subscribeToChats,
@@ -48,6 +56,7 @@ export default function GroupChats() {
   const [editingMembers, setEditingMembers] = useState<string[]>([]);
   const [updatingGroup, setUpdatingGroup] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+  const [showTableView, setShowTableView] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unsubscribeChatsRef = useRef<(() => void) | null>(null);
   const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
@@ -260,28 +269,60 @@ export default function GroupChats() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-[calc(100vh-7rem)] gap-6">
-        {/* Chat List */}
-        <div className={cn(
-          "w-80 flex-shrink-0 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
-          selectedChat && "hidden md:flex"
-        )}>
-          <div className="p-4 border-b">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-lg font-semibold">Group Chats</h2>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-3xl font-bold">Group Chats</h1>
+            <p className="text-muted-foreground mt-1">
+              {isAdmin ? 'Manage and view all group chats' : 'Your assigned group conversations'}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={showTableView ? "default" : "outline"}
+              onClick={() => setShowTableView(true)}
+              className="gap-2"
+            >
+              <Users className="h-4 w-4" />
+              Table View
+            </Button>
+            <Button
+              variant={!showTableView ? "default" : "outline"}
+              onClick={() => setShowTableView(false)}
+              className="gap-2"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Chat View
+            </Button>
+          </div>
+        </div>
+
+        {/* Table View */}
+        {showTableView ? (
+          <div className="rounded-lg border bg-card">
+            <div className="p-4 border-b flex items-center justify-between">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search groups..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
               {isAdmin && (
                 <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
                   <DialogTrigger asChild>
-                    <Button variant="ghost" size="icon">
+                    <Button className="ml-4 gap-2">
                       <Plus className="h-4 w-4" />
+                      Create Group
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
                       <DialogTitle>Create Group Chat</DialogTitle>
-                      <DialogDescription>
-                        Create a new group chat with selected members
-                      </DialogDescription>
+                      <DialogDescription>Create a new group chat with selected members</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
@@ -307,7 +348,7 @@ export default function GroupChats() {
                         <ScrollArea className="h-48 border rounded-lg p-4">
                           <div className="space-y-2">
                             {facultyMembers
-                              .filter(m => m.id !== user?.id && m.isActive)
+                              .filter(m => m.isActive)
                               .map(member => (
                                 <div key={member.id} className="flex items-center gap-2">
                                   <Checkbox
@@ -350,204 +391,201 @@ export default function GroupChats() {
                   </DialogContent>
                 </Dialog>
               )}
+            </div>
 
-              {isAdmin && (
-                <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Edit Group Chat</DialogTitle>
-                      <DialogDescription>
-                        Update group name, description, and members
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="edit-group-name">Group Name</Label>
-                        <Input
-                          id="edit-group-name"
-                          placeholder="e.g., Research Committee"
-                          value={editGroupName}
-                          onChange={(e) => setEditGroupName(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="edit-group-desc">Description</Label>
-                        <Input
-                          id="edit-group-desc"
-                          placeholder="e.g., Discussions on research"
-                          value={editGroupDescription}
-                          onChange={(e) => setEditGroupDescription(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label className="mb-3 block">Members</Label>
-                        <ScrollArea className="h-48 border rounded-lg p-4">
-                          <div className="space-y-2">
-                            {facultyMembers
-                              .filter(m => m.isActive)
-                              .map(member => (
-                                <div key={member.id} className="flex items-center gap-2">
-                                  <Checkbox
-                                    id={`edit-member-${member.id}`}
-                                    checked={editingMembers.includes(member.id)}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        setEditingMembers([...editingMembers, member.id]);
-                                      } else {
-                                        setEditingMembers(
-                                          editingMembers.filter(id => id !== member.id)
-                                        );
-                                      }
-                                    }}
-                                    disabled={member.id === editingChat?.createdBy}
-                                  />
-                                  <label
-                                    htmlFor={`edit-member-${member.id}`}
-                                    className="text-sm font-medium cursor-pointer"
-                                  >
-                                    {member.name}
-                                    {member.id === editingChat?.createdBy && (
-                                      <span className="text-xs text-muted-foreground ml-2">(Creator)</span>
-                                    )}
-                                  </label>
-                                </div>
-                              ))}
-                          </div>
-                        </ScrollArea>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowEditDialog(false)}
-                          disabled={updatingGroup}
-                          className="flex-1"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleUpdateGroup}
-                          disabled={!editGroupName.trim() || updatingGroup}
-                          className="flex-1"
-                        >
-                          {updatingGroup ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              Updating...
-                            </>
-                          ) : (
-                            'Update Group'
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Group Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Members</TableHead>
+                    <TableHead>Last Message</TableHead>
+                    <TableHead>Updated</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingChats ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8">
+                        <div className="flex justify-center">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : groupChats.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                        No group chats yet
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    groupChats
+                      .filter(chat =>
+                        chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                      .map(chat => (
+                        <TableRow key={chat.id} className="cursor-pointer hover:bg-muted/50">
+                          <TableCell className="font-medium">
+                            <button
+                              onClick={() => {
+                                setSelectedChat(chat);
+                                setShowTableView(false);
+                              }}
+                              className="text-primary hover:underline"
+                            >
+                              {chat.avatar} {chat.name}
+                            </button>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {chat.description || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Users className="h-4 w-4" />
+                              <span className="text-sm">{chat.participants.length}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm max-w-xs truncate">
+                            {chat.lastMessage || 'No messages yet'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {formatTime(chat.lastMessageTime)}
+                          </TableCell>
+                          {isAdmin && (
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => handleOpenEdit(chat)}
+                                  className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+                                  title="Edit group"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteGroup(chat.id)}
+                                  disabled={deletingGroupId === chat.id}
+                                  className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
+                                  title="Delete group"
+                                >
+                                  {deletingGroupId === chat.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </div>
+                            </TableCell>
                           )}
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search groups..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-          
-          <ScrollArea className="flex-1">
-            {loadingChats ? (
-              <div className="flex items-center justify-center p-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredChats.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-8 text-center">
-                <Users className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">No group chats yet</p>
-              </div>
-            ) : (
-              filteredChats.map((chat) => (
-                <button
-                  key={chat.id}
-                  onClick={() => setSelectedChat(chat)}
-                  className={cn(
-                    "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b group",
-                    selectedChat?.id === chat.id && "bg-muted"
+                        </TableRow>
+                      ))
                   )}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-medium">
-                      {chat.avatar}
+                </TableBody>
+              </Table>
+            </div>
+
+            {isAdmin && (
+              <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Edit Group Chat</DialogTitle>
+                    <DialogDescription>Update group name, description, and members</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="edit-group-name">Group Name</Label>
+                      <Input
+                        id="edit-group-name"
+                        placeholder="e.g., Research Committee"
+                        value={editGroupName}
+                        onChange={(e) => setEditGroupName(e.target.value)}
+                      />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-card-foreground truncate">
-                          {chat.name}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          {formatTime(chat.lastMessageTime)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {chat.lastMessage || 'No messages yet'}
-                      </p>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Users className="h-3 w-3" />
-                          {chat.participants.length}
-                        </span>
-                        {isAdmin && (
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenEdit(chat);
-                              }}
-                              className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
-                              title="Edit group"
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteGroup(chat.id);
-                              }}
-                              disabled={deletingGroupId === chat.id}
-                              className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
-                              title="Delete group"
-                            >
-                              {deletingGroupId === chat.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          </div>
+                    <div>
+                      <Label htmlFor="edit-group-desc">Description</Label>
+                      <Input
+                        id="edit-group-desc"
+                        placeholder="e.g., Discussions on research"
+                        value={editGroupDescription}
+                        onChange={(e) => setEditGroupDescription(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-3 block">Members</Label>
+                      <ScrollArea className="h-48 border rounded-lg p-4">
+                        <div className="space-y-2">
+                          {facultyMembers
+                            .filter(m => m.isActive)
+                            .map(member => (
+                              <div key={member.id} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`edit-member-${member.id}`}
+                                  checked={editingMembers.includes(member.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setEditingMembers([...editingMembers, member.id]);
+                                    } else {
+                                      setEditingMembers(
+                                        editingMembers.filter(id => id !== member.id)
+                                      );
+                                    }
+                                  }}
+                                  disabled={member.id === editingChat?.createdBy}
+                                />
+                                <label
+                                  htmlFor={`edit-member-${member.id}`}
+                                  className="text-sm font-medium cursor-pointer"
+                                >
+                                  {member.name}
+                                  {member.id === editingChat?.createdBy && (
+                                    <span className="text-xs text-muted-foreground ml-2">(Creator)</span>
+                                  )}
+                                </label>
+                              </div>
+                            ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowEditDialog(false)}
+                        disabled={updatingGroup}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleUpdateGroup}
+                        disabled={!editGroupName.trim() || updatingGroup}
+                        className="flex-1"
+                      >
+                        {updatingGroup ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Updating...
+                          </>
+                        ) : (
+                          'Update Group'
                         )}
-                      </div>
+                      </Button>
                     </div>
                   </div>
-                </button>
-              ))
+                </DialogContent>
+              </Dialog>
             )}
-          </ScrollArea>
-        </div>
-
-        {/* Chat Area */}
-        <div className={cn(
-          "flex-1 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
-          !selectedChat && "hidden md:flex"
-        )}>
-          {selectedChat ? (
-            <>
+          </div>
+        ) : (
+          /* Chat View */
+          selectedChat ? (
+            <div className="rounded-lg border bg-card h-[calc(100vh-10rem)] flex flex-col overflow-hidden">
               {/* Chat Header */}
               <div className="flex items-center justify-between p-4 border-b">
                 <div className="flex items-center gap-3">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="md:hidden"
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setSelectedChat(null)}
                   >
                     <ArrowLeft className="h-4 w-4" />
@@ -556,17 +594,31 @@ export default function GroupChats() {
                     {selectedChat.avatar}
                   </div>
                   <div>
-                    <h3 className="font-medium text-card-foreground">
-                      {selectedChat.name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedChat.participants.length} members
-                    </p>
+                    <h3 className="font-medium text-card-foreground">{selectedChat.name}</h3>
+                    <p className="text-xs text-muted-foreground">{selectedChat.participants.length} members</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+                {isAdmin && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleOpenEdit(selectedChat)}
+                      className="p-2 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteGroup(selectedChat.id)}
+                      disabled={deletingGroupId === selectedChat.id}
+                      className="p-2 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
+                    >
+                      {deletingGroupId === selectedChat.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Messages Area */}
@@ -580,38 +632,33 @@ export default function GroupChats() {
                     <div className="flex flex-col items-center justify-center h-full py-12 text-center">
                       <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-muted-foreground">No messages yet</p>
-                      <p className="text-sm text-muted-foreground/70 mt-1">
-                        Start the conversation!
-                      </p>
+                      <p className="text-sm text-muted-foreground/70 mt-1">Start the conversation!</p>
                     </div>
                   ) : (
                     messages.map((message) => {
                       const isOwn = message.senderId === user?.id;
                       return (
-                        <div
-                          key={message.id}
-                          className={cn(
-                            "flex",
-                            isOwn ? "justify-end" : "justify-start"
-                          )}
-                        >
-                          <div className={cn(
-                            "max-w-[70%] rounded-2xl px-4 py-2",
-                            isOwn 
-                              ? "bg-primary text-primary-foreground rounded-br-md" 
-                              : "bg-muted rounded-bl-md"
-                          )}>
+                        <div key={message.id} className={cn("flex", isOwn ? "justify-end" : "justify-start")}>
+                          <div
+                            className={cn(
+                              "max-w-[70%] rounded-2xl px-4 py-2",
+                              isOwn ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md"
+                            )}
+                          >
                             {!isOwn && (
-                              <p className="text-xs font-medium mb-1 opacity-70">
-                                {message.senderName}
-                              </p>
+                              <p className="text-xs font-medium mb-1 opacity-70">{message.senderName}</p>
                             )}
                             <p className="text-sm">{message.content}</p>
-                            <p className={cn(
-                              "text-xs mt-1",
-                              isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
-                            )}>
-                              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            <p
+                              className={cn(
+                                "text-xs mt-1",
+                                isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                              )}
+                            >
+                              {message.timestamp.toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
                             </p>
                           </div>
                         </div>
@@ -633,33 +680,31 @@ export default function GroupChats() {
                     disabled={sendingMessage}
                     className="flex-1"
                   />
-                  <Button 
-                    onClick={handleSendMessage} 
+                  <Button
+                    onClick={handleSendMessage}
                     disabled={!messageInput.trim() || sendingMessage}
                   >
                     {sendingMessage ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      'Send'
+                      <MessageSquare className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
               </div>
-            </>
+            </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-                <MessageSquare className="h-8 w-8 text-muted-foreground" />
-              </div>
+            <div className="rounded-lg border bg-card h-[calc(100vh-10rem)] flex flex-col items-center justify-center text-center">
+              <MessageSquare className="h-16 w-16 text-muted-foreground/50 mb-4" />
               <h3 className="font-display text-xl font-semibold text-card-foreground mb-2">
                 Select a Group Chat
               </h3>
               <p className="text-muted-foreground max-w-sm">
-                Choose a group from the list to start messaging with your colleagues.
+                Click on a group from the table to view messages and chat with members.
               </p>
             </div>
-          )}
-        </div>
+          )
+        )}
       </div>
     </DashboardLayout>
   );
