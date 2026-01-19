@@ -110,6 +110,7 @@ export const sendMessage = async (
 };
 
 // Create a direct chat
+// In chatService.ts - Update the createDirectChat function:
 export const createDirectChat = async (
   userId1: string,
   userName1: string,
@@ -135,10 +136,10 @@ export const createDirectChat = async (
       return existingChat.id;
     }
     
-    // Create new chat
+    // Create new chat with proper data
     const newChat = await addDoc(chatsRef, {
       type: 'direct',
-      name: '', // Direct chats use participant names
+      name: `${userName1} & ${userName2}`, // Set a display name
       participants: [userId1, userId2],
       participantNames: {
         [userId1]: userName1,
@@ -148,9 +149,11 @@ export const createDirectChat = async (
       createdAt: serverTimestamp(),
       lastMessage: '',
       lastMessageTime: serverTimestamp(),
+      lastMessageSenderId: '',
       avatar: userName2.charAt(0).toUpperCase(),
     });
     
+    console.log('Created new direct chat:', newChat.id);
     return newChat.id;
   } catch (error) {
     console.error('Error creating direct chat:', error);

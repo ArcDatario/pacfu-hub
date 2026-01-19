@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,8 @@ import {
   subscribeToChats, 
   subscribeToMessages, 
   sendMessage, 
-  createDirectChat 
+  createDirectChat,
+  getChat
 } from '@/services/chatService';
 import { Chat, Message } from '@/types/chat';
 
@@ -39,9 +40,52 @@ export default function Messages() {
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [creatingChat, setCreatingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unsubscribeChatsRef = useRef<(() => void) | null>(null);
   const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
+
+  // Get the display name for a chat
+  const getChatDisplayName = useCallback((chat: Chat): string => {
+    if (chat.type === 'group') {
+      return chat.name || 'Group Chat';
+    }
+    
+    // For direct chats, show the other person's name
+    if (chat.type === 'direct' && user) {
+      // Find the other participant's ID
+      const otherParticipantId = chat.participants.find(id => id !== user.id);
+      if (otherParticipantId) {
+        // Try to get name from participantNames first
+        if (chat.participantNames && chat.participantNames[otherParticipantId]) {
+          return chat.participantNames[otherParticipantId];
+        }
+        
+        // Fallback: look up in faculty members
+        const faculty = facultyMembers.find(m => m.id === otherParticipantId);
+        if (faculty) {
+          return faculty.name;
+        }
+      }
+    }
+    
+    return chat.name || 'Direct Chat';
+  }, [user, facultyMembers]);
+
+  // Get avatar for a chat
+  const getChatAvatar = useCallback((chat: Chat): string => {
+    if (chat.type === 'group') {
+      return chat.avatar || chat.name?.charAt(0).toUpperCase() || 'G';
+    }
+    
+    // For direct chats, use the other person's first initial
+    if (chat.type === 'direct' && user) {
+      const displayName = getChatDisplayName(chat);
+      return displayName.charAt(0).toUpperCase();
+    }
+    
+    return chat.avatar || 'U';
+  }, [user, getChatDisplayName]);
 
   // Subscribe to chats
   useEffect(() => {
@@ -52,8 +96,18 @@ export default function Messages() {
     }
 
     setLoadingChats(true);
+    
     const unsubscribe = subscribeToChats(user.id, (chats) => {
-      setConversations(chats);
+      console.log('Received chats from subscription:', chats);
+      
+      // Sort chats by lastMessageTime (newest first)
+      const sortedChats = [...chats].sort((a, b) => {
+        const timeA = a.lastMessageTime?.getTime() || a.createdAt.getTime();
+        const timeB = b.lastMessageTime?.getTime() || b.createdAt.getTime();
+        return timeB - timeA;
+      });
+      
+      setConversations(sortedChats);
       setLoadingChats(false);
     });
 
@@ -103,7 +157,7 @@ export default function Messages() {
   }, [messages]);
 
   const filteredConversations = conversations.filter(conv =>
-    conv.name.toLowerCase().includes(searchQuery.toLowerCase())
+    getChatDisplayName(conv).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSendMessage = async () => {
@@ -149,49 +203,60 @@ export default function Messages() {
     const member = facultyMembers.find(m => m.id === memberId);
     if (!member || !user) return;
 
-    // Check if conversation exists
-    const existing = conversations.find(
-      c => c.type === 'direct' && c.participants.includes(memberId)
+    // Check if conversation already exists in local state
+    const existingChat = conversations.find(chat => 
+      chat.type === 'direct' && 
+      chat.participants.includes(memberId) && 
+      chat.participants.includes(user.id)
     );
     
-    if (existing) {
-      setSelectedChat(existing);
-    } else {
-      // Create new direct chat in Firebase
-      const chatId = await createDirectChat(user.id, user.name, memberId, member.name);
-      if (chatId) {
-        // Don't manually add to state - let Firebase subscription handle it
-        // Just select the chat and close the dialog
-        // The subscription will pick it up automatically
-        const newChat: Chat = {
-          id: chatId,
-          type: 'direct',
-          name: member.name,
-          participants: [user.id, memberId],
-          participantNames: {
-            [user.id]: user.name,
-            [memberId]: member.name,
-          },
-          createdBy: user.id,
-          createdAt: new Date(),
-          avatar: member.name.charAt(0).toUpperCase(),
-        };
-        setSelectedChat(newChat);
-        // Add to conversations state so it appears immediately
-        setConversations(prev => {
-          // Check if it already exists (in case subscription updates during creation)
-          const exists = prev.some(c => c.id === chatId);
-          return exists ? prev : [newChat, ...prev];
-        });
-      }
+    if (existingChat) {
+      setSelectedChat(existingChat);
+      setShowNewChat(false);
+      return;
     }
-    setShowNewChat(false);
+
+    // Create new direct chat
+    setCreatingChat(true);
+    
+    try {
+      const chatId = await createDirectChat(
+        user.id,
+        user.name,
+        memberId,
+        member.name
+      );
+      
+      if (chatId) {
+        // Immediately fetch the created chat from Firebase
+        const newChat = await getChat(chatId);
+        
+        if (newChat) {
+          // Add to conversations list at the top
+          setConversations(prev => {
+            const exists = prev.some(c => c.id === chatId);
+            if (!exists) {
+              return [newChat, ...prev];
+            }
+            return prev;
+          });
+          
+          setSelectedChat(newChat);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating direct chat:', error);
+    } finally {
+      setCreatingChat(false);
+      setShowNewChat(false);
+    }
   };
 
+  // Also need to update the chatService.ts getChat function to ensure it fetches properly
   return (
     <DashboardLayout>
       <div className="flex h-[calc(100vh-7rem)] gap-6">
-        {/* Conversation List */}
+        {/* Conversation List - LEFT SIDE */}
         <div className={cn(
           "w-80 flex-shrink-0 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
           selectedChat && "hidden md:flex"
@@ -199,8 +264,17 @@ export default function Messages() {
           <div className="p-4 border-b">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold">Messages</h2>
-              <Button variant="ghost" size="icon" onClick={() => setShowNewChat(!showNewChat)}>
-                <Plus className="h-4 w-4" />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setShowNewChat(!showNewChat)}
+                disabled={creatingChat}
+              >
+                {creatingChat ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
               </Button>
             </div>
             <div className="relative">
@@ -223,7 +297,8 @@ export default function Messages() {
                     <button
                       key={member.id}
                       onClick={() => startNewDirectChat(member.id)}
-                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors"
+                      disabled={creatingChat}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
                     >
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
                         {member.name.charAt(0)}
@@ -248,47 +323,66 @@ export default function Messages() {
               <div className="flex flex-col items-center justify-center p-8 text-center">
                 <MessageSquare className="h-8 w-8 text-muted-foreground/50 mb-2" />
                 <p className="text-sm text-muted-foreground">No conversations yet</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-2"
+                  onClick={() => setShowNewChat(true)}
+                >
+                  Start a conversation
+                </Button>
               </div>
             ) : (
-              filteredConversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => setSelectedChat(conv)}
-                  className={cn(
-                    "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b",
-                    selectedChat?.id === conv.id && "bg-muted"
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full font-medium",
-                      conv.type === 'group' 
-                        ? "bg-primary text-primary-foreground" 
-                        : "bg-accent text-accent-foreground"
-                    )}>
-                      {conv.type === 'group' ? <Users className="h-5 w-5" /> : conv.avatar}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-card-foreground truncate">
-                          {conv.name}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          {formatTime(conv.lastMessageTime)}
-                        </span>
+              filteredConversations.map((conv) => {
+                const displayName = getChatDisplayName(conv);
+                const avatar = getChatAvatar(conv);
+                
+                return (
+                  <button
+                    key={conv.id}
+                    onClick={() => setSelectedChat(conv)}
+                    className={cn(
+                      "w-full p-4 text-left transition-colors hover:bg-muted/50 border-b",
+                      selectedChat?.id === conv.id && "bg-muted"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-full font-medium",
+                        conv.type === 'group' 
+                          ? "bg-primary text-primary-foreground" 
+                          : "bg-accent text-accent-foreground"
+                      )}>
+                        {conv.type === 'group' 
+                          ? <Users className="h-5 w-5" /> 
+                          : avatar
+                        }
                       </div>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {conv.lastMessage || 'No messages yet'}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="font-medium text-card-foreground truncate">
+                            {displayName}
+                            {conv.type === 'direct' && (
+                              <span className="ml-2 text-xs text-muted-foreground">(Direct)</span>
+                            )}
+                          </p>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatTime(conv.lastMessageTime)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {conv.lastMessage || 'No messages yet'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))
+                  </button>
+                );
+              })
             )}
           </ScrollArea>
         </div>
 
-        {/* Chat Area */}
+        {/* Chat Area - RIGHT SIDE */}
         <div className={cn(
           "flex-1 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
           !selectedChat && "hidden md:flex"
@@ -314,12 +408,15 @@ export default function Messages() {
                   )}>
                     {selectedChat.type === 'group' 
                       ? <Users className="h-5 w-5" /> 
-                      : selectedChat.avatar
+                      : getChatAvatar(selectedChat)
                     }
                   </div>
                   <div>
                     <h3 className="font-medium text-card-foreground">
-                      {selectedChat.name}
+                      {selectedChat.type === 'direct' 
+                        ? getChatDisplayName(selectedChat)
+                        : selectedChat.name
+                      }
                     </h3>
                     <p className="text-xs text-muted-foreground">
                       {selectedChat.type === 'group' 
@@ -424,6 +521,14 @@ export default function Messages() {
               <p className="text-muted-foreground max-w-sm">
                 Choose a conversation from the list or start a new chat to message your colleagues.
               </p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setShowNewChat(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Conversation
+              </Button>
             </div>
           )}
         </div>
