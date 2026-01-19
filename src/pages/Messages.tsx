@@ -14,7 +14,8 @@ import {
   Send,
   User,
   ArrowLeft,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,9 +24,27 @@ import {
   subscribeToMessages, 
   sendMessage, 
   createDirectChat,
-  getChat
+  getChat,
+  deleteDirectChat
 } from '@/services/chatService';
 import { Chat, Message } from '@/types/chat';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 
 export default function Messages() {
   const { user } = useAuth();
@@ -41,6 +60,9 @@ export default function Messages() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
+  const [deletingChat, setDeletingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unsubscribeChatsRef = useRef<(() => void) | null>(null);
   const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
@@ -252,7 +274,40 @@ export default function Messages() {
     }
   };
 
-  // Also need to update the chatService.ts getChat function to ensure it fetches properly
+  // Handle delete conversation
+  const handleDeleteChat = async () => {
+    if (!chatToDelete) return;
+    
+    setDeletingChat(true);
+    try {
+      const success = await deleteDirectChat(chatToDelete.id);
+      if (success) {
+        toast.success('Conversation deleted');
+        // Remove from local state
+        setConversations(prev => prev.filter(c => c.id !== chatToDelete.id));
+        // Clear selected if it was the deleted one
+        if (selectedChat?.id === chatToDelete.id) {
+          setSelectedChat(null);
+        }
+      } else {
+        toast.error('Failed to delete conversation');
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      toast.error('Failed to delete conversation');
+    } finally {
+      setDeletingChat(false);
+      setDeleteDialogOpen(false);
+      setChatToDelete(null);
+    }
+  };
+
+  const openDeleteDialog = (chat: Chat) => {
+    setChatToDelete(chat);
+    setDeleteDialogOpen(true);
+  };
+
+
   return (
     <DashboardLayout>
       <div className="flex h-[calc(100vh-7rem)] gap-6">
@@ -426,9 +481,22 @@ export default function Messages() {
                     </p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-popover border shadow-md">
+                    <DropdownMenuItem 
+                      onClick={() => openDeleteDialog(selectedChat)}
+                      className="text-destructive focus:text-destructive cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Conversation
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Messages Area */}
@@ -533,6 +601,37 @@ export default function Messages() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this conversation with{' '}
+              <strong>{chatToDelete ? getChatDisplayName(chatToDelete) : ''}</strong>?
+              This will permanently delete all messages and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingChat}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteChat}
+              disabled={deletingChat}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingChat ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

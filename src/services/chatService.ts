@@ -19,13 +19,13 @@ import {
 import { db } from '@/lib/firebase';
 import { Chat, Message } from '@/types/chat';
 
-// Subscribe to user's chats
+// Subscribe to user's chats (without orderBy to avoid composite index requirement)
 export const subscribeToChats = (userId: string, callback: (chats: Chat[]) => void): Unsubscribe => {
   const chatsRef = collection(db, 'chats');
+  // Only filter by participants - sorting done client-side to avoid needing composite index
   const q = query(
     chatsRef,
-    where('participants', 'array-contains', userId),
-    orderBy('lastMessageTime', 'desc')
+    where('participants', 'array-contains', userId)
   );
   
   return onSnapshot(q, (snapshot) => {
@@ -46,10 +46,43 @@ export const subscribeToChats = (userId: string, callback: (chats: Chat[]) => vo
         avatar: data.avatar,
       } as Chat;
     });
-    callback(chats);
+    
+    // Sort client-side by lastMessageTime (newest first)
+    const sortedChats = chats.sort((a, b) => {
+      const timeA = a.lastMessageTime?.getTime() || a.createdAt.getTime();
+      const timeB = b.lastMessageTime?.getTime() || b.createdAt.getTime();
+      return timeB - timeA;
+    });
+    
+    callback(sortedChats);
   }, (error) => {
     console.error('Error subscribing to chats:', error);
+    // On error, try to fetch without realtime for fallback
+    callback([]);
   });
+};
+
+// Delete a direct chat conversation
+export const deleteDirectChat = async (chatId: string): Promise<boolean> => {
+  try {
+    // First delete all messages in the subcollection
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    const messagesSnapshot = await getDocs(messagesRef);
+    
+    // Delete each message
+    const deletePromises = messagesSnapshot.docs.map(messageDoc => 
+      deleteDoc(doc(db, 'chats', chatId, 'messages', messageDoc.id))
+    );
+    await Promise.all(deletePromises);
+    
+    // Then delete the chat document
+    await deleteDoc(doc(db, 'chats', chatId));
+    console.log('Deleted chat:', chatId);
+    return true;
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    return false;
+  }
 };
 
 // Subscribe to messages in a chat
