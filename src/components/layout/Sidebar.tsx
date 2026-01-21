@@ -103,20 +103,17 @@ export function Sidebar() {
           </div>
           
           <div className="flex gap-2">
-            <Link to="/settings" className="flex-1">
-              <Button variant="sidebar" size="sm" className="w-full gap-2">
-                <Settings className="h-4 w-4" />
-                Settings
-              </Button>
-            </Link>
-            <Button 
-              variant="sidebar" 
-              size="sm" 
-              onClick={logout}
-              className="gap-2 text-destructive hover:text-destructive"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+            
+           <Button
+            variant="sidebar"
+            size="sm"
+            onClick={logout}
+            className="group gap-2 bg-transparent text-white hover:bg-transparent"
+          >
+            <LogOut className="h-4 w-4 text-red-400 group-hover:text-red-500" />
+            <span className="group-hover:text-red-400">Logout</span>
+          </Button>
+
           </div>
         </div>
       </div>
