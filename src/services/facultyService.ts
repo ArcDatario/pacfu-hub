@@ -5,6 +5,7 @@ import {
   getDocs, 
   doc, 
   updateDoc,
+  deleteDoc,
   onSnapshot,
   orderBy,
   arrayUnion,
@@ -79,7 +80,7 @@ export const toggleFacultyActive = async (userId: string, currentStatus: boolean
 // Update faculty details
 export const updateFacultyDetails = async (
   userId: string, 
-  data: Partial<{ name: string; department: string; groups: string[] }>,
+  data: Partial<{ name: string; department: string; position: string; groups: string[] }>,
   oldFacultyData?: FacultyMember
 ): Promise<boolean> => {
   try {
@@ -117,13 +118,62 @@ export const updateFacultyDetails = async (
             },
           });
         }
+        
+        // Update name in groups they're already in
+        if (isInOldGroups && isInNewGroups && data.name && data.name !== oldFacultyData.name) {
+          await updateDoc(chatDoc.ref, {
+            participantNames: {
+              ...chatData.participantNames,
+              [userId]: data.name,
+            },
+          });
+        }
       }
     }
     
+    // Update the user document with all provided fields
     await updateDoc(userRef, data);
     return true;
   } catch (error) {
     console.error('Error updating faculty:', error);
+    return false;
+  }
+};
+
+// Delete faculty member
+export const deleteFacultyMember = async (userId: string): Promise<boolean> => {
+  try {
+    // Remove faculty from all group chats first
+    const chatsRef = collection(db, 'chats');
+    const q = query(chatsRef, where('type', '==', 'group'));
+    const chatsSnapshot = await getDocs(q);
+    
+    for (const chatDoc of chatsSnapshot.docs) {
+      const chatData = chatDoc.data();
+      
+      // Check if this faculty member is a participant
+      if (chatData.participants && chatData.participants.includes(userId)) {
+        const newParticipantNames = { ...chatData.participantNames };
+        delete newParticipantNames[userId];
+        
+        await updateDoc(chatDoc.ref, {
+          participants: arrayRemove(userId),
+          participantNames: newParticipantNames,
+        });
+      }
+    }
+    
+    // Delete the user document from Firestore
+    const userRef = doc(db, 'users', userId);
+    await deleteDoc(userRef);
+    
+    // Note: Firebase Auth user deletion requires admin SDK or Cloud Functions
+    // For now, we're only deleting from Firestore
+    // You may want to implement a Cloud Function to also delete from Auth
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting faculty member:', error);
     return false;
   }
 };

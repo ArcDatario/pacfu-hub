@@ -23,6 +23,34 @@ interface EditFacultyDialogProps {
   faculty: FacultyMember;
 }
 
+// Use the same departments list as CreateFacultyDialog
+const departments = [
+  'College of Arts and Sciences',
+  'College of Engineering',
+  'College of Business',
+  'College of Agriculture',
+  'College of Education',
+  'Graduate Studies',
+  'Administration',
+];
+
+// Use the same positions list as CreateFacultyDialog
+const positions = [
+  'Instructor I',
+  'Instructor II',
+  'Instructor III',
+  'Assistant Professor I',
+  'Assistant Professor II',
+  'Assistant Professor III',
+  'Associate Professor I',
+  'Associate Professor II',
+  'Associate Professor III',
+  'Professor I',
+  'Professor II',
+  'Professor III',
+  'Professor IV',
+];
+
 export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDialogProps) {
   const { updateFacultyDetails } = useFaculty();
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
@@ -43,17 +71,18 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
     return () => unsubscribe();
   }, []);
 
+  // Update form data when faculty prop changes or dialog opens
   useEffect(() => {
-    if (faculty) {
+    if (faculty && open) {
       setFormData({
         name: faculty.name,
         email: faculty.email,
         department: faculty.department,
         position: faculty.position,
-        groups: faculty.groups,
+        groups: faculty.groups || [],
       });
     }
-  }, [faculty]);
+  }, [faculty, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,8 +92,8 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
       const updateData = {
         name: formData.name,
         department: formData.department,
-        groups: formData.groups,
         position: formData.position,
+        groups: formData.groups,
       };
 
       const success = await updateFacultyDetails(faculty.id, updateData, faculty);
@@ -96,18 +125,6 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-
-  const departments = [
-    'Computer Science',
-    'Information Technology',
-    'Engineering',
-    'Business Administration',
-    'Mathematics',
-    'Physics',
-    'Chemistry',
-    'Biology',
-    'Not Assigned'
-  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -142,6 +159,7 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
                 onChange={handleChange}
                 required
                 disabled
+                className="bg-muted"
               />
             </div>
           </div>
@@ -166,13 +184,19 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
             
             <div className="space-y-2">
               <Label htmlFor="position">Position</Label>
-              <Input
-                id="position"
-                name="position"
+              <Select
                 value={formData.position}
-                onChange={handleChange}
-                placeholder="e.g., Professor, Lecturer"
-              />
+                onValueChange={(value) => setFormData(prev => ({ ...prev, position: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select position" />
+                </SelectTrigger>
+                <SelectContent>
+                  {positions.map((pos) => (
+                    <SelectItem key={pos} value={pos}>{pos}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

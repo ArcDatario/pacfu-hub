@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { FacultyMember, CreateFacultyData } from '@/types/faculty';
-import { subscribeFaculty, toggleFacultyActive } from '@/services/facultyService';
+import { 
+  subscribeFaculty, 
+  toggleFacultyActive,
+  updateFacultyDetails as updateFacultyDetailsService,
+  deleteFacultyMember as deleteFacultyMemberService
+} from '@/services/facultyService';
 
 interface FacultyContextType {
   facultyMembers: FacultyMember[];
@@ -56,12 +61,7 @@ export function FacultyProvider({ children }: { children: ReactNode }) {
     if (member) {
       // Update in Firebase
       toggleFacultyActive(id, member.isActive);
-      // Update local state
-      setFacultyMembers((prev) =>
-        prev.map((member) =>
-          member.id === id ? { ...member, isActive: !member.isActive } : member
-        )
-      );
+      // Local state will be updated automatically by the subscribeFaculty listener
     }
   };
 
@@ -71,8 +71,19 @@ export function FacultyProvider({ children }: { children: ReactNode }) {
 
   const updateFacultyDetails = async (id: string, data: Partial<FacultyMember>, oldData: FacultyMember) => {
     try {
-      updateFaculty(id, data);
-      return true;
+      // Prepare the data to send to Firebase
+      const updateData: Partial<{ name: string; department: string; position: string; groups: string[] }> = {};
+      
+      if (data.name !== undefined) updateData.name = data.name;
+      if (data.department !== undefined) updateData.department = data.department;
+      if (data.position !== undefined) updateData.position = data.position;
+      if (data.groups !== undefined) updateData.groups = data.groups;
+
+      // Update in Firebase
+      const success = await updateFacultyDetailsService(id, updateData, oldData);
+      
+      // Local state will be updated automatically by the subscribeFaculty listener
+      return success;
     } catch (error) {
       console.error('Error updating faculty details:', error);
       return false;
@@ -81,10 +92,11 @@ export function FacultyProvider({ children }: { children: ReactNode }) {
 
   const deleteFacultyMember = async (id: string) => {
     try {
-      setFacultyMembers((prev) =>
-        prev.filter((member) => member.id !== id)
-      );
-      return true;
+      // Delete from Firebase
+      const success = await deleteFacultyMemberService(id);
+      
+      // Local state will be updated automatically by the subscribeFaculty listener
+      return success;
     } catch (error) {
       console.error('Error deleting faculty member:', error);
       return false;
