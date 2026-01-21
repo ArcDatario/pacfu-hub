@@ -3,8 +3,10 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  User as FirebaseUser
+  User as FirebaseUser,
+  getAuth
 } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { 
   doc, 
   getDoc, 
@@ -16,7 +18,7 @@ import {
   updateDoc,
   arrayUnion
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, firebaseConfig } from '@/lib/firebase';
 import { User, UserRole } from '@/types/auth';
 
 // Default admin account - will be created on first app load
@@ -153,7 +155,7 @@ export const getUserData = async (uid: string): Promise<User | null> => {
   }
 };
 
-// Create faculty account
+// Create faculty account using a secondary auth instance to prevent logout
 export const createFacultyAccount = async (
   email: string,
   password: string,
@@ -163,8 +165,12 @@ export const createFacultyAccount = async (
   groups: string[] = []
 ): Promise<{ success: boolean; error?: string; userId?: string }> => {
   try {
-    // Create user in Firebase Auth
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // Create a secondary Firebase app instance to avoid logging out the current admin
+    const secondaryApp = initializeApp(firebaseConfig, 'secondary-' + Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+    
+    // Create user in Firebase Auth using secondary auth
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
     
     // Create user document in Firestore
     await setDoc(doc(db, 'users', userCredential.user.uid), {
@@ -198,6 +204,10 @@ export const createFacultyAccount = async (
         }
       }
     }
+    
+    // Sign out from secondary auth and delete the secondary app
+    await signOut(secondaryAuth);
+    await deleteApp(secondaryApp);
     
     return { success: true, userId: userCredential.user.uid };
   } catch (error: any) {

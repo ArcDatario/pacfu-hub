@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
-import { GraduationCap, Shield, User } from 'lucide-react';
+import { GraduationCap } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -30,18 +30,6 @@ export default function Login() {
     }
   };
 
-  const handleDemoLogin = async (role: 'admin' | 'faculty') => {
-    const credentials = role === 'admin' 
-      ? { email: 'admin@pacfu.psau.edu', password: 'admin123' }
-      : { email: 'faculty@pacfu.psau.edu', password: 'faculty123' };
-    
-    const result = await login(credentials.email, credentials.password);
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error || 'Demo login failed. Please create the account first.');
-    }
-  };
 
   return (
     <div className="min-h-screen flex">
@@ -140,42 +128,6 @@ export default function Login() {
               {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or continue with demo
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Button
-              variant="outline"
-              onClick={() => handleDemoLogin('admin')}
-              className="h-auto py-4 flex-col gap-2"
-            >
-              <Shield className="h-5 w-5 text-primary" />
-              <span className="font-medium">Admin Demo</span>
-              <span className="text-xs text-muted-foreground">Full access</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleDemoLogin('faculty')}
-              className="h-auto py-4 flex-col gap-2"
-            >
-              <User className="h-5 w-5 text-accent" />
-              <span className="font-medium">Faculty Demo</span>
-              <span className="text-xs text-muted-foreground">Limited access</span>
-            </Button>
-          </div>
-
-          <p className="text-center text-xs text-muted-foreground">
-            For account issues, please contact your PACFU administrator.
-          </p>
         </div>
       </div>
     </div>
