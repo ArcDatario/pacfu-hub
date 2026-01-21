@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { Group, subscribeToGroups } from '@/services/groupService';
 
 interface CreateFacultyDialogProps {
   open: boolean;
@@ -52,17 +53,10 @@ const positions = [
   'Professor IV',
 ];
 
-const availableGroups = [
-  'Research Committee',
-  'Curriculum Committee',
-  'PACFU Officers',
-  'Faculty Development',
-  'Accreditation Team',
-  'Extension Committee',
-];
 
 export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogProps) {
   const { createFaculty } = useAuth();
+  const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -73,6 +67,14 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
     groups: [] as string[],
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  // Subscribe to groups from Firebase
+  useEffect(() => {
+    const unsubscribe = subscribeToGroups((groups) => {
+      setAvailableGroups(groups);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,20 +234,26 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
 
           <div className="space-y-2">
             <Label>Assign to Groups (Optional)</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {availableGroups.map((group) => (
-                <label
-                  key={group}
-                  className="flex items-center gap-2 text-sm cursor-pointer"
-                >
-                  <Checkbox
-                    checked={formData.groups.includes(group)}
-                    onCheckedChange={() => toggleGroup(group)}
-                  />
-                  {group}
-                </label>
-              ))}
-            </div>
+            {availableGroups.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No groups available. Create groups in the Faculty Management page first.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                {availableGroups.map((group) => (
+                  <label
+                    key={group.id}
+                    className="flex items-center gap-2 text-sm cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={formData.groups.includes(group.name)}
+                      onCheckedChange={() => toggleGroup(group.name)}
+                    />
+                    <span className="truncate" title={group.name}>{group.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <DialogFooter>

@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useFaculty } from '@/contexts/FacultyContext';
 import { CreateFacultyDialog } from '@/components/faculty/CreateFacultyDialog';
+import { GroupManagement } from '@/components/faculty/GroupManagement';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,9 +27,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Faculty() {
   const { facultyMembers, toggleFacultyStatus } = useFaculty();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -244,6 +248,9 @@ export default function Faculty() {
             </div>
           )}
         </div>
+
+        {/* Group Management Section - Admin Only */}
+        {isAdmin && <GroupManagement />}
       </div>
 
       <CreateFacultyDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
