@@ -15,7 +15,8 @@ import {
   User,
   ArrowLeft,
   Loader2,
-  Trash2
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,7 +45,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function Messages() {
   const { user } = useAuth();
@@ -66,6 +70,30 @@ export default function Messages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unsubscribeChatsRef = useRef<(() => void) | null>(null);
   const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
+
+  // Check if a user account exists in Firestore
+  const checkUserExists = async (userId: string): Promise<boolean> => {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('__name__', '==', userId));
+      const snapshot = await getDocs(q);
+      return !snapshot.empty;
+    } catch (error) {
+      console.error('Error checking user existence:', error);
+      return false;
+    }
+  };
+
+  // Check if the other participant in a direct chat exists
+  const isOtherParticipantDeleted = useCallback(async (chat: Chat): Promise<boolean> => {
+    if (chat.type !== 'direct' || !user) return false;
+    
+    const otherParticipantId = chat.participants.find(id => id !== user.id);
+    if (!otherParticipantId) return false;
+    
+    const exists = await checkUserExists(otherParticipantId);
+    return !exists;
+  }, [user]);
 
   // Get the display name for a chat
   const getChatDisplayName = useCallback((chat: Chat): string => {
@@ -89,6 +117,8 @@ export default function Messages() {
           return faculty.name;
         }
       }
+      
+      return 'Unknown User';
     }
     
     return chat.name || 'Direct Chat';
@@ -307,6 +337,20 @@ export default function Messages() {
     setDeleteDialogOpen(true);
   };
 
+  // Check if current selected chat has deleted participant
+  const [isParticipantDeleted, setIsParticipantDeleted] = useState(false);
+  
+  useEffect(() => {
+    const checkDeleted = async () => {
+      if (selectedChat && selectedChat.type === 'direct') {
+        const deleted = await isOtherParticipantDeleted(selectedChat);
+        setIsParticipantDeleted(deleted);
+      } else {
+        setIsParticipantDeleted(false);
+      }
+    };
+    checkDeleted();
+  }, [selectedChat, isOtherParticipantDeleted]);
 
   return (
     <DashboardLayout>
@@ -472,11 +516,16 @@ export default function Messages() {
                         ? getChatDisplayName(selectedChat)
                         : selectedChat.name
                       }
+                      {isParticipantDeleted && (
+                        <span className="ml-2 text-xs text-destructive">(Account Deleted)</span>
+                      )}
                     </h3>
                     <p className="text-xs text-muted-foreground">
                       {selectedChat.type === 'group' 
                         ? `${selectedChat.participants.length} members`
-                        : 'Direct message'
+                        : isParticipantDeleted 
+                          ? 'User account no longer exists'
+                          : 'Direct message'
                       }
                     </p>
                   </div>
@@ -499,6 +548,26 @@ export default function Messages() {
                 </DropdownMenu>
               </div>
 
+              {/* Deleted Account Warning */}
+              {isParticipantDeleted && (
+                <Alert variant="destructive" className="m-4 mb-0">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span>
+                      This user's account has been deleted. You can no longer send messages.
+                    </span>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => openDeleteDialog(selectedChat)}
+                      className="ml-4 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    >
+                      Delete Conversation
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Messages Area */}
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4">
@@ -512,9 +581,11 @@ export default function Messages() {
                       <p className="text-muted-foreground">
                         No messages yet
                       </p>
-                      <p className="text-sm text-muted-foreground/70 mt-1">
-                        Start the conversation!
-                      </p>
+                      {!isParticipantDeleted && (
+                        <p className="text-sm text-muted-foreground/70 mt-1">
+                          Start the conversation!
+                        </p>
+                      )}
                     </div>
                   ) : (
                     messages.map((message) => {
@@ -558,16 +629,16 @@ export default function Messages() {
               <div className="p-4 border-t">
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Type a message..."
+                    placeholder={isParticipantDeleted ? "Cannot send messages to deleted account" : "Type a message..."}
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    disabled={sendingMessage}
+                    disabled={sendingMessage || isParticipantDeleted}
                     className="flex-1"
                   />
                   <Button 
                     onClick={handleSendMessage} 
-                    disabled={!messageInput.trim() || sendingMessage}
+                    disabled={!messageInput.trim() || sendingMessage || isParticipantDeleted}
                   >
                     {sendingMessage ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
