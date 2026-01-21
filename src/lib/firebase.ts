@@ -4,7 +4,7 @@ import { getAuth } from 'firebase/auth';
 import { getAnalytics } from "firebase/analytics";
 
 // Firebase configuration - Replace these with your actual Firebase config
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyB7sqIUVHT5FLyaNPlVhr_moe_RjjhHIpU",
   authDomain: "pacfu-portal.firebaseapp.com",
   projectId: "pacfu-portal",
