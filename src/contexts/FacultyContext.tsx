@@ -6,7 +6,9 @@ interface FacultyContextType {
   facultyMembers: FacultyMember[];
   addFaculty: (data: CreateFacultyData) => void;
   updateFaculty: (id: string, data: Partial<FacultyMember>) => void;
+  updateFacultyDetails: (id: string, data: Partial<FacultyMember>, oldData: FacultyMember) => Promise<boolean>;
   toggleFacultyStatus: (id: string) => void;
+  deleteFacultyMember: (id: string) => Promise<boolean>;
   getFacultyById: (id: string) => FacultyMember | undefined;
 }
 
@@ -67,13 +69,37 @@ export function FacultyProvider({ children }: { children: ReactNode }) {
     return facultyMembers.find((member) => member.id === id);
   };
 
+  const updateFacultyDetails = async (id: string, data: Partial<FacultyMember>, oldData: FacultyMember) => {
+    try {
+      updateFaculty(id, data);
+      return true;
+    } catch (error) {
+      console.error('Error updating faculty details:', error);
+      return false;
+    }
+  };
+
+  const deleteFacultyMember = async (id: string) => {
+    try {
+      setFacultyMembers((prev) =>
+        prev.filter((member) => member.id !== id)
+      );
+      return true;
+    } catch (error) {
+      console.error('Error deleting faculty member:', error);
+      return false;
+    }
+  };
+
   return (
     <FacultyContext.Provider
       value={{
         facultyMembers,
         addFaculty,
         updateFaculty,
+        updateFacultyDetails,
         toggleFacultyStatus,
+        deleteFacultyMember,
         getFacultyById,
       }}
     >

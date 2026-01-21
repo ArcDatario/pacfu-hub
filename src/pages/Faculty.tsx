@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,14 @@ import {
   UserX,
   MessageSquare,
   Edit,
-  Power
+  Power,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFaculty } from '@/contexts/FacultyContext';
 import { CreateFacultyDialog } from '@/components/faculty/CreateFacultyDialog';
+import { EditFacultyDialog } from '@/components/faculty/EditFacultyDialog'; // Add this import
+import { DeleteFacultyDialog } from '@/components/faculty/DeleteFacultyDialog'; // Add this import
 import { GroupManagement } from '@/components/faculty/GroupManagement';
 import {
   DropdownMenu,
@@ -28,14 +31,18 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { FacultyMember } from '@/types/faculty';
 
 export default function Faculty() {
-  const { facultyMembers, toggleFacultyStatus } = useFaculty();
+  const { facultyMembers, toggleFacultyStatus, deleteFacultyMember } = useFaculty();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedFaculty, setSelectedFaculty] = useState<FacultyMember | null>(null);
   const navigate = useNavigate();
 
   const filteredFaculty = facultyMembers.filter(member => {
@@ -62,6 +69,29 @@ export default function Faculty() {
 
   const handleStartChat = (memberId: string) => {
     navigate(`/messages?userId=${memberId}`);
+  };
+
+  const handleEdit = (member: FacultyMember) => {
+    setSelectedFaculty(member);
+    setShowEditDialog(true);
+  };
+
+  const handleDelete = (member: FacultyMember) => {
+    setSelectedFaculty(member);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (selectedFaculty) {
+      const success = await deleteFacultyMember(selectedFaculty.id);
+      if (success) {
+        toast.success(`${selectedFaculty.name} has been deleted successfully`);
+        setShowDeleteDialog(false);
+        setSelectedFaculty(null);
+      } else {
+        toast.error('Failed to delete faculty member');
+      }
+    }
   };
 
   return (
@@ -221,18 +251,29 @@ export default function Faculty() {
                             <MessageSquare className="mr-2 h-4 w-4" />
                             Send Message
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => handleToggleStatus(member.id, member.name, member.isActive)}
-                            className={member.isActive ? "text-destructive" : "text-success"}
-                          >
-                            <Power className="mr-2 h-4 w-4" />
-                            {member.isActive ? 'Deactivate' : 'Activate'}
-                          </DropdownMenuItem>
+                          {isAdmin && (
+                            <>
+                              <DropdownMenuItem onClick={() => handleEdit(member)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleToggleStatus(member.id, member.name, member.isActive)}
+                                className={member.isActive ? "text-destructive" : "text-success"}
+                              >
+                                <Power className="mr-2 h-4 w-4" />
+                                {member.isActive ? 'Deactivate' : 'Activate'}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => handleDelete(member)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete Account
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -254,6 +295,22 @@ export default function Faculty() {
       </div>
 
       <CreateFacultyDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
+      
+      {selectedFaculty && (
+        <>
+          <EditFacultyDialog 
+            open={showEditDialog} 
+            onOpenChange={setShowEditDialog}
+            faculty={selectedFaculty}
+          />
+          <DeleteFacultyDialog 
+            open={showDeleteDialog} 
+            onOpenChange={setShowDeleteDialog}
+            faculty={selectedFaculty}
+            onConfirm={handleDeleteConfirm}
+          />
+        </>
+      )}
     </DashboardLayout>
   );
 }
