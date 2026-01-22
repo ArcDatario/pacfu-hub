@@ -289,6 +289,7 @@ export const hasUserVoted = async (electionId: string, userId: string): Promise<
 };
 
 // Cast votes for an election (one vote per position)
+// Cast votes for an election (allows empty votes for "None" selections)
 export const castVotes = async (
   electionId: string,
   userId: string,
@@ -305,6 +306,7 @@ export const castVotes = async (
     const batch = writeBatch(db);
     const votesRef = collection(db, 'votes');
 
+    // Record votes for selected candidates
     votes.forEach((vote) => {
       const voteRef = doc(votesRef);
       batch.set(voteRef, {
@@ -316,6 +318,20 @@ export const castVotes = async (
       });
     });
 
+    // Even if votes array is empty (user selected "None" for all positions),
+    // we still need to mark that the user has participated
+    // We'll create a special vote record to track participation
+    if (votes.length === 0) {
+      const voteRef = doc(votesRef);
+      batch.set(voteRef, {
+        electionId,
+        userId,
+        positionId: 'participation_only',  // Special position ID for participation tracking
+        candidateId: 'abstained',          // Special candidate ID to indicate abstention
+        timestamp: Timestamp.now(),
+      });
+    }
+
     await batch.commit();
     return true;
   } catch (error) {
@@ -325,10 +341,16 @@ export const castVotes = async (
 };
 
 // Calculate vote counts for an election
+// Calculate vote counts for an election (updated to filter out participation-only votes)
 export const calculateVoteCounts = (votes: Vote[]): Record<string, Record<string, number>> => {
   const counts: Record<string, Record<string, number>> = {};
 
   votes.forEach((vote) => {
+    // Skip participation-only votes (abstained votes)
+    if (vote.positionId === 'participation_only' || vote.candidateId === 'abstained') {
+      return;
+    }
+    
     if (!counts[vote.positionId]) {
       counts[vote.positionId] = {};
     }
@@ -362,6 +384,7 @@ export const calculateWinners = (
 };
 
 // Get election with votes and statistics
+// Get election with votes and statistics
 export const getElectionWithVotes = async (
   electionId: string,
   userId?: string
@@ -386,7 +409,7 @@ export const getElectionWithVotes = async (
 
     return {
       ...election,
-      votes,
+      votes,  // This includes ALL votes (including abstentions)
       hasVoted,
       voteCounts,
       winners,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -211,33 +211,31 @@ function ElectionCard({
   onEndElection: (electionId: string) => Promise<void>;
 }) {
   const { getFacultyById } = useFaculty();
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [uniqueVoters, setUniqueVoters] = useState<Set<string>>(new Set());
   
-  // Update time every minute for accurate progress calculation
+  // Calculate unique voters from votes - FIXED: Include ALL votes (including participation_only)
   useEffect(() => {
-    if (election.status === 'active') {
-      const interval = setInterval(() => {
-        setCurrentTime(new Date());
-      }, 60000); // Update every minute
-      
-      return () => clearInterval(interval);
+    if (election.votes && election.votes.length > 0) {
+      const uniqueUserIds = new Set(election.votes.map(vote => vote.userId));
+      setUniqueVoters(uniqueUserIds);
+    } else {
+      setUniqueVoters(new Set());
     }
-  }, [election.status]);
+  }, [election.votes]);
   
   const status = statusStyles[election.status];
   const startDate = election.startDate instanceof Date ? election.startDate : new Date(election.startDate);
   const endDate = election.endDate instanceof Date ? election.endDate : new Date(election.endDate);
   
-  // Calculate progress based on time elapsed (more accurate than days)
-  const totalTime = endDate.getTime() - startDate.getTime();
-  const elapsedTime = currentTime.getTime() - startDate.getTime();
-  const progress = totalTime > 0 
-    ? Math.min(Math.max((elapsedTime / totalTime) * 100, 0), 100)
+  // Calculate progress based on percentage of faculty who have voted
+  const totalVoters = election.totalVoters || 0;
+  const votedCount = uniqueVoters.size;
+  const progress = totalVoters > 0 
+    ? Math.round((votedCount / totalVoters) * 100)
     : 0;
 
-  const totalVotes = election.votes?.length || 0;
-  const votePercentage = election.totalVoters
-    ? Math.round((totalVotes / election.totalVoters) * 100)
+  const votePercentage = totalVoters > 0
+    ? Math.round((votedCount / totalVoters) * 100)
     : 0;
 
   return (
@@ -293,29 +291,33 @@ function ElectionCard({
               <Calendar className="h-4 w-4" />
               {format(startDate, 'MMM dd, yyyy')} - {format(endDate, 'MMM dd, yyyy')}
             </span>
-            {election.totalVoters && (
+            {totalVoters > 0 && (
               <span className="flex items-center gap-1">
                 <Users className="h-4 w-4" />
-                {election.totalVoters} eligible voters
+                {totalVoters} eligible voters
               </span>
             )}
             {election.status !== 'upcoming' && (
               <span className="flex items-center gap-1">
                 <BarChart3 className="h-4 w-4" />
-                {totalVotes} votes ({votePercentage}%)
+                {votedCount} voted ({votePercentage}%)
               </span>
             )}
           </div>
         </div>
 
-        {/* Progress Bar for Active Elections */}
+        {/* Progress Bar for Active Elections - Now shows voting participation */}
         {election.status === 'active' && (
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Election Progress</span>
-              <span>{Math.round(progress)}%</span>
+              <span>Voting Participation</span>
+              <span>{progress}% ({votedCount}/{totalVoters} voted)</span>
             </div>
             <Progress value={progress} />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Remaining voters: {totalVoters - votedCount}</span>
+              <span>Total votes cast: {election.votes?.length || 0}</span>
+            </div>
           </div>
         )}
       </div>
@@ -435,11 +437,12 @@ function ElectionCard({
         <div className="px-6 pb-6 border-t pt-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Trophy className="h-4 w-4 text-accent" />
-            <span>Winners have been determined for all positions.</span>
+            <span>
+              Election ended with {votedCount} out of {totalVoters} faculty voting ({progress}% participation)
+            </span>
           </div>
         </div>
       )}
     </div>
   );
 }
-

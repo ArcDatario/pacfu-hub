@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { ElectionWithVotes } from '@/types/election';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MinusCircle } from 'lucide-react';
 
 interface VoteDialogProps {
   open: boolean;
@@ -23,6 +24,9 @@ interface VoteDialogProps {
   election: ElectionWithVotes;
   onVoteSuccess: () => void;
 }
+
+// Special value to represent "None" option
+const NONE_VALUE = 'none';
 
 export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: VoteDialogProps) {
   const { user } = useAuth();
@@ -35,10 +39,8 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
     if (open) {
       const initialVotes: Record<string, string> = {};
       election.positions.forEach((position) => {
-        // Pre-select first candidate if available
-        if (position.candidateIds.length > 0) {
-          initialVotes[position.id] = position.candidateIds[0];
-        }
+        // Initially no selection for each position (empty string)
+        initialVotes[position.id] = '';
       });
       setSelectedVotes(initialVotes);
     } else {
@@ -59,13 +61,21 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
     });
   };
 
+  const handleSelectNone = (positionId: string) => {
+    handleVoteChange(positionId, NONE_VALUE);
+  };
+
+  const handleClearSelection = (positionId: string) => {
+    handleVoteChange(positionId, '');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate all positions have votes
+    // Validate all positions have a selection (either candidate or none)
     for (const position of election.positions) {
-      if (!selectedVotes[position.id]) {
-        toast.error(`Please select a candidate for ${position.title}`);
+      if (selectedVotes[position.id] === undefined || selectedVotes[position.id] === '') {
+        toast.error(`Please make a selection for ${position.title}. You can choose a candidate or select "None".`);
         return;
       }
     }
@@ -78,12 +88,19 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
     setIsLoading(true);
 
     try {
-      const votes = election.positions.map((position) => ({
-        positionId: position.id,
-        candidateId: selectedVotes[position.id],
-      }));
+      // Filter out "none" votes - these won't be recorded as votes for candidates
+      // but will still count as the user having participated in the election
+      const votes = election.positions
+        .filter(position => selectedVotes[position.id] !== NONE_VALUE)
+        .map((position) => ({
+          positionId: position.id,
+          candidateId: selectedVotes[position.id],
+        }));
 
+      // Even if all votes are "none", we still need to record that the user has voted
+      // We'll cast an empty vote array, which will still mark the user as having voted
       await castVotes(election.id, user.id, votes);
+      
       toast.success('Your vote has been cast successfully');
       onVoteSuccess();
       onOpenChange(false);
@@ -95,13 +112,19 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
     }
   };
 
+  // Check if all positions have selections
+  const allPositionsSelected = election.positions.every(
+    position => selectedVotes[position.id] !== undefined && selectedVotes[position.id] !== ''
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-display">Cast Your Vote</DialogTitle>
           <DialogDescription>
-            Select your preferred candidate for each position. You can only vote once.
+            Select your preferred candidate for each position, or choose "None" if you prefer not to vote for any candidate. 
+            You can only vote once, and your participation will be counted regardless of your choices.
           </DialogDescription>
         </DialogHeader>
 
@@ -109,6 +132,9 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
           <form onSubmit={handleSubmit} className="space-y-6" style={{ pointerEvents: 'auto' }}>
             {election.positions.map((position) => {
               const selectedCandidate = selectedVotes[position.id];
+              const isNoneSelected = selectedCandidate === NONE_VALUE;
+              const hasSelection = selectedCandidate !== '' && selectedCandidate !== undefined;
+              
               const candidates = position.candidateIds
                 .map((id) => {
                   const faculty = getFacultyById(id);
@@ -126,16 +152,59 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
 
               return (
                 <div key={position.id} className="space-y-3 border rounded-lg p-4 bg-card">
-                  <div>
-                    <Label className="text-base font-semibold">{position.title}</Label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Select {position.numberOfWinners} winner{position.numberOfWinners > 1 ? 's' : ''}
-                    </p>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <Label className="text-base font-semibold">{position.title}</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Select {position.numberOfWinners} winner{position.numberOfWinners > 1 ? 's' : ''} or choose "None"
+                      </p>
+                    </div>
+                    
+                    {hasSelection && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleClearSelection(position.id)}
+                        className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                      >
+                        <MinusCircle className="h-4 w-4 mr-1" />
+                        Clear
+                      </Button>
+                    )}
                   </div>
 
+                  {/* None option */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectNone(position.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                      isNoneSelected
+                        ? 'border-destructive bg-destructive/10 shadow-sm ring-2 ring-destructive ring-offset-2'
+                        : 'border-border hover:border-destructive/50 hover:bg-destructive/5'
+                    }`}
+                  >
+                    <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                      isNoneSelected 
+                        ? 'border-destructive bg-destructive' 
+                        : 'border-muted-foreground'
+                    }`}>
+                      {isNoneSelected && (
+                        <div className="h-2 w-2 rounded-full bg-destructive-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-destructive">None / Abstain</p>
+                      <p className="text-xs text-muted-foreground">
+                        I choose not to vote for any candidate in this position
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Candidate options */}
                   <div className="space-y-2">
                     {candidates.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground text-center py-2">
                         No candidates available for this position.
                       </p>
                     ) : (
@@ -145,10 +214,7 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
                           <button
                             key={candidate.id}
                             type="button"
-                            onClick={() => {
-                              console.log('Candidate clicked:', candidate.name, 'Position:', position.id);
-                              handleVoteChange(position.id, candidate.id);
-                            }}
+                            onClick={() => handleVoteChange(position.id, candidate.id)}
                             className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
                               isSelected
                                 ? 'border-primary bg-primary/10 shadow-sm ring-2 ring-primary ring-offset-2'
@@ -187,9 +253,34 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
                       })
                     )}
                   </div>
+
+                  {/* Current selection indicator */}
+                  {hasSelection && !isNoneSelected && (
+                    <div className="pt-2 border-t">
+                      <p className="text-xs text-muted-foreground">
+                        Currently selected: <span className="font-medium text-primary">
+                          {candidates.find(c => c.id === selectedCandidate)?.name || 'Unknown'}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                  {isNoneSelected && (
+                    <div className="pt-2 border-t">
+                      <p className="text-xs text-muted-foreground">
+                        You have chosen to <span className="font-medium text-destructive">abstain</span> from voting in this position.
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })}
+
+            <div className="p-4 border rounded-lg bg-muted/50">
+              <p className="text-sm text-muted-foreground">
+                <strong>Note:</strong> Choosing "None" counts as participation in the election. 
+                Your vote will be recorded, and you will be marked as having voted even if you select "None" for all positions.
+              </p>
+            </div>
 
             <DialogFooter>
               <Button
@@ -200,7 +291,11 @@ export function VoteDialog({ open, onOpenChange, election, onVoteSuccess }: Vote
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="accent" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                variant="accent" 
+                disabled={isLoading || !allPositionsSelected}
+              >
                 {isLoading ? 'Submitting...' : 'Submit Vote'}
               </Button>
             </DialogFooter>
