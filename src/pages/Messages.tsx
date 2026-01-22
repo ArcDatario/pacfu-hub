@@ -67,6 +67,7 @@ export default function Messages() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
   const [deletingChat, setDeletingChat] = useState(false);
+  const [userAvatars, setUserAvatars] = useState<Record<string, string>>({}); // Store user avatars
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unsubscribeChatsRef = useRef<(() => void) | null>(null);
   const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
@@ -83,6 +84,27 @@ export default function Messages() {
       return false;
     }
   };
+
+  // Fetch user avatars for participants
+  const fetchUserAvatars = useCallback(async (participants: string[]) => {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('__name__', 'in', participants));
+      const snapshot = await getDocs(q);
+      
+      const avatars: Record<string, string> = {};
+      snapshot.docs.forEach(doc => {
+        const userData = doc.data();
+        if (userData.avatar) {
+          avatars[doc.id] = userData.avatar;
+        }
+      });
+      
+      setUserAvatars(prev => ({ ...prev, ...avatars }));
+    } catch (error) {
+      console.error('Error fetching user avatars:', error);
+    }
+  }, []);
 
   // Check if the other participant in a direct chat exists
   const isOtherParticipantDeleted = useCallback(async (chat: Chat): Promise<boolean> => {
@@ -134,10 +156,15 @@ export default function Messages() {
     if (chat.type === 'direct' && user) {
       const otherParticipantId = chat.participants.find(id => id !== user.id);
       if (otherParticipantId) {
-        // Check if there's a stored avatar for this participant
+        // Check if there's a stored avatar for this participant in the chat
         const participantAvatars = (chat as any).participantAvatars;
         if (participantAvatars && participantAvatars[otherParticipantId]) {
           return { type: 'image', value: participantAvatars[otherParticipantId] };
+        }
+        
+        // Check in our fetched user avatars
+        if (userAvatars[otherParticipantId]) {
+          return { type: 'image', value: userAvatars[otherParticipantId] };
         }
       }
       const displayName = getChatDisplayName(chat);
@@ -145,7 +172,26 @@ export default function Messages() {
     }
     
     return { type: 'text', value: chat.avatar || 'U' };
-  }, [user, getChatDisplayName]);
+  }, [user, getChatDisplayName, userAvatars]);
+
+  // Get avatar for a specific user
+  const getUserAvatar = useCallback((userId: string): { type: 'image' | 'text'; value: string } => {
+    // First check in userAvatars state
+    if (userAvatars[userId]) {
+      return { type: 'image', value: userAvatars[userId] };
+    }
+    
+    // Check in faculty members
+    const faculty = facultyMembers.find(m => m.id === userId);
+    if (faculty && faculty.avatar) {
+      return { type: 'image', value: faculty.avatar };
+    }
+    
+    // Fallback to first letter of name
+    const user = facultyMembers.find(m => m.id === userId);
+    const displayName = user?.name || 'User';
+    return { type: 'text', value: displayName.charAt(0).toUpperCase() };
+  }, [userAvatars, facultyMembers]);
 
   // Subscribe to chats
   useEffect(() => {
@@ -169,6 +215,20 @@ export default function Messages() {
       
       setConversations(sortedChats);
       setLoadingChats(false);
+      
+      // Fetch avatars for all participants in all chats
+      const allParticipants = new Set<string>();
+      chats.forEach(chat => {
+        chat.participants.forEach(participant => {
+          if (participant !== user.id) {
+            allParticipants.add(participant);
+          }
+        });
+      });
+      
+      if (allParticipants.size > 0) {
+        fetchUserAvatars(Array.from(allParticipants));
+      }
     });
 
     unsubscribeChatsRef.current = unsubscribe;
@@ -177,7 +237,7 @@ export default function Messages() {
         unsubscribeChatsRef.current();
       }
     };
-  }, [user]);
+  }, [user, fetchUserAvatars]);
 
   // Subscribe to messages when chat is selected
   useEffect(() => {
@@ -215,6 +275,17 @@ export default function Messages() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Fetch avatars when selected chat changes
+  useEffect(() => {
+    if (selectedChat && user) {
+      // Get participants other than current user
+      const otherParticipants = selectedChat.participants.filter(id => id !== user.id);
+      if (otherParticipants.length > 0) {
+        fetchUserAvatars(otherParticipants);
+      }
+    }
+  }, [selectedChat, user, fetchUserAvatars]);
 
   const filteredConversations = conversations.filter(conv =>
     getChatDisplayName(conv).toLowerCase().includes(searchQuery.toLowerCase())
@@ -302,6 +373,9 @@ export default function Messages() {
           });
           
           setSelectedChat(newChat);
+          
+          // Fetch avatar for the new chat participant
+          fetchUserAvatars([memberId]);
         }
       }
     } catch (error) {
@@ -407,8 +481,14 @@ export default function Messages() {
                       disabled={creatingChat}
                       className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
-                        {member.name.charAt(0)}
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full overflow-hidden bg-primary/10">
+                        {member.avatar ? (
+                          <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-primary text-sm font-medium">
+                            {member.name.charAt(0)}
+                          </span>
+                        )}
                       </div>
                       <div className="text-left">
                         <p className="text-sm font-medium">{member.name}</p>
@@ -455,17 +535,17 @@ export default function Messages() {
                   >
                     <div className="flex items-start gap-3">
                       <div className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-full font-medium overflow-hidden",
+                        "flex h-10 w-10 items-center justify-center rounded-full font-medium overflow-hidden shrink-0",
                         conv.type === 'group' 
                           ? "bg-primary text-primary-foreground" 
-                          : "bg-accent text-accent-foreground"
+                          : "bg-accent"
                       )}>
                         {conv.type === 'group' ? (
                           <Users className="h-5 w-5" />
                         ) : avatar.type === 'image' ? (
-                          <img src={avatar.value} alt="" className="h-full w-full object-cover" />
+                          <img src={avatar.value} alt={displayName} className="h-full w-full object-cover" />
                         ) : (
-                          avatar.value
+                          <span className="text-accent-foreground">{avatar.value}</span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -511,19 +591,19 @@ export default function Messages() {
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                   <div className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full font-medium overflow-hidden",
+                    "flex h-10 w-10 items-center justify-center rounded-full font-medium overflow-hidden shrink-0",
                     selectedChat.type === 'group'
                       ? "bg-primary text-primary-foreground"
-                      : "bg-accent text-accent-foreground"
+                      : "bg-accent"
                   )}>
                     {selectedChat.type === 'group' ? (
                       <Users className="h-5 w-5" />
                     ) : (() => {
                       const avatar = getChatAvatar(selectedChat);
                       return avatar.type === 'image' ? (
-                        <img src={avatar.value} alt="" className="h-full w-full object-cover" />
+                        <img src={avatar.value} alt={getChatDisplayName(selectedChat)} className="h-full w-full object-cover" />
                       ) : (
-                        avatar.value
+                        <span className="text-accent-foreground">{avatar.value}</span>
                       );
                     })()}
                   </div>
@@ -607,14 +687,38 @@ export default function Messages() {
                   ) : (
                     messages.map((message) => {
                       const isOwn = message.senderId === user?.id;
+                      const senderAvatar = getUserAvatar(message.senderId);
+                      
                       return (
                         <div
                           key={message.id}
                           className={cn(
-                            "flex",
+                            "flex items-end gap-2",
                             isOwn ? "justify-end" : "justify-start"
                           )}
                         >
+                          {/* Sender Avatar (only show for incoming messages) */}
+                          {!isOwn && (
+                            <div className="flex-shrink-0">
+                              <div className="h-8 w-8 rounded-full overflow-hidden">
+                                {senderAvatar.type === 'image' ? (
+                                  <img 
+                                    src={senderAvatar.value} 
+                                    alt={message.senderName} 
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full bg-accent flex items-center justify-center">
+                                    <span className="text-accent-foreground text-xs font-medium">
+                                      {senderAvatar.value}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Message Bubble */}
                           <div className={cn(
                             "max-w-[70%] rounded-2xl px-4 py-2",
                             isOwn 
@@ -634,6 +738,27 @@ export default function Messages() {
                               {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
+                          
+                          {/* Current User Avatar (only show for own messages) */}
+                          {isOwn && user && (
+                            <div className="flex-shrink-0">
+                              <div className="h-8 w-8 rounded-full overflow-hidden">
+                                {user.avatar ? (
+                                  <img 
+                                    src={user.avatar} 
+                                    alt={user.name} 
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full bg-primary flex items-center justify-center">
+                                    <span className="text-primary-foreground text-xs font-medium">
+                                      {user.name.charAt(0)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })
