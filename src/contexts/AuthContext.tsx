@@ -89,15 +89,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  // FIXED: Force a fresh fetch from Firestore with proper state update
   const refreshUser = async () => {
     if (!authState.user) return;
     
-    const userData = await getUserData(authState.user.id);
-    if (userData) {
-      setAuthState(prev => ({
-        ...prev,
-        user: userData,
-      }));
+    try {
+      // Force a fresh fetch from Firestore (no cache)
+      const userData = await getUserData(authState.user.id);
+      
+      if (userData) {
+        // Update state with fresh data, creating a new object to trigger re-render
+        setAuthState(prev => ({
+          ...prev,
+          user: {
+            ...userData,
+            // Ensure all fields are properly set
+            id: userData.id,
+            email: userData.email,
+            name: userData.name,
+            role: userData.role,
+            avatar: userData.avatar, // This is the key field
+            isActive: userData.isActive,
+            createdAt: userData.createdAt,
+          },
+        }));
+        
+        console.log('User refreshed successfully:', userData);
+      }
+    } catch (error) {
+      console.error('Error refreshing user:', error);
     }
   };
 

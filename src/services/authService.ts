@@ -97,6 +97,7 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
       email: userData.email,
       name: userData.name,
       role: userData.role,
+      avatar: userData.avatar || undefined,
       isActive: userData.isActive,
       createdAt: userData.createdAt?.toDate() || new Date(),
     };
@@ -134,14 +135,20 @@ export const onAuthChange = (callback: (user: FirebaseUser | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// Get user data from Firestore
+// Get user data from Firestore (with fresh fetch)
 export const getUserData = async (uid: string): Promise<User | null> => {
   try {
+    // Force a fresh fetch from Firestore
     const userDoc = await getDoc(doc(db, 'users', uid));
-    if (!userDoc.exists()) return null;
+    
+    if (!userDoc.exists()) {
+      console.log('User document does not exist');
+      return null;
+    }
     
     const data = userDoc.data();
-    return {
+    
+    const user: User = {
       id: uid,
       email: data.email,
       name: data.name,
@@ -150,6 +157,10 @@ export const getUserData = async (uid: string): Promise<User | null> => {
       isActive: data.isActive,
       createdAt: data.createdAt?.toDate() || new Date(),
     };
+    
+    console.log('Fetched user data:', user);
+    
+    return user;
   } catch (error) {
     console.error('Error getting user data:', error);
     return null;

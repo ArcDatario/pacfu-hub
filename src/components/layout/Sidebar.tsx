@@ -91,13 +91,14 @@ export function Sidebar() {
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent overflow-hidden">
                 {user?.avatar ? (
                   <img 
+                    key={user.avatar} // Force re-render when avatar changes
                     src={user.avatar} 
                     alt={user.name} 
                     className="h-full w-full object-cover"
                   />
                 ) : (
                   <span className="text-sm font-medium text-sidebar-accent-foreground">
-                    {user?.name?.charAt(0) || 'U'}
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                   </span>
                 )}
               </div>
