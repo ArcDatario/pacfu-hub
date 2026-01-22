@@ -9,7 +9,6 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Announcements from "./pages/Announcements";
-import GroupChats from "./pages/GroupChats";
 import Documents from "./pages/Documents";
 import Polls from "./pages/Polls";
 import Elections from "./pages/Elections";
@@ -32,8 +31,7 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/announcements" element={<Announcements />} />
-              <Route path="/chats" element={<GroupChats />} />
-              <Route path="/messages" element={<Messages />} />
+                            <Route path="/messages" element={<Messages />} />
               <Route path="/documents" element={<Documents />} />
               <Route path="/polls" element={<Polls />} />
               <Route path="/elections" element={<Elections />} />

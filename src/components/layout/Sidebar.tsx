@@ -29,8 +29,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Announcements', href: '/announcements', icon: Megaphone },
-  { label: 'Group Chats', href: '/chats', icon: MessageSquare },
-  { label: 'Direct Messages', href: '/messages', icon: MessageSquare },
+    { label: 'Messages', href: '/messages', icon: MessageSquare },
   { label: 'Documents', href: '/documents', icon: FolderOpen },
   { label: 'Polls & Surveys', href: '/polls', icon: BarChart3 },
   { label: 'Elections', href: '/elections', icon: Vote },
