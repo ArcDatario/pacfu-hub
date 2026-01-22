@@ -17,6 +17,7 @@ export interface Group {
   name: string;
   description: string;
   createdAt: Date;
+  avatar?: string;
 }
 
 // Subscribe to all groups (real-time)
@@ -31,6 +32,7 @@ export const subscribeToGroups = (callback: (groups: Group[]) => void): Unsubscr
         name: data.name,
         description: data.description || '',
         createdAt: data.createdAt?.toDate() || new Date(),
+        avatar: data.avatar,
       } as Group;
     });
     
@@ -56,6 +58,7 @@ export const getAllGroups = async (): Promise<Group[]> => {
         name: data.name,
         description: data.description || '',
         createdAt: data.createdAt?.toDate() || new Date(),
+        avatar: data.avatar,
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
@@ -65,12 +68,13 @@ export const getAllGroups = async (): Promise<Group[]> => {
 };
 
 // Create a new group
-export const createGroup = async (name: string, description: string = ''): Promise<string | null> => {
+export const createGroup = async (name: string, description: string = '', avatar?: string): Promise<string | null> => {
   try {
     const groupsRef = collection(db, 'groups');
     const newGroup = await addDoc(groupsRef, {
       name,
       description,
+      avatar: avatar || name.charAt(0).toUpperCase(),
       createdAt: serverTimestamp(),
     });
     return newGroup.id;
@@ -81,11 +85,12 @@ export const createGroup = async (name: string, description: string = ''): Promi
 };
 
 // Update a group
-export const updateGroup = async (groupId: string, name: string, description: string = ''): Promise<boolean> => {
+export const updateGroup = async (groupId: string, name: string, description: string = '', avatar?: string): Promise<boolean> => {
   try {
     await updateDoc(doc(db, 'groups', groupId), {
       name,
       description,
+      ...(avatar !== undefined ? { avatar } : {}),
     });
     return true;
   } catch (error) {

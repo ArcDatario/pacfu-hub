@@ -186,8 +186,14 @@ export default function Faculty() {
                   <tr key={member.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-medium">
-                          {member.name.charAt(0)}
+                        <div className="h-10 w-10 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                          {member.avatar ? (
+                            <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-sm font-semibold text-muted-foreground">
+                              {member.name.charAt(0)}
+                            </span>
+                          )}
                         </div>
                         <div>
                           <p className="font-medium text-card-foreground">{member.name}</p>

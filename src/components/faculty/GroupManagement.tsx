@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Camera, Image as ImageIcon } from 'lucide-react';
 import { 
   Plus, 
   Pencil, 
@@ -43,8 +44,12 @@ export function GroupManagement() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [deletingGroup, setDeletingGroup] = useState<Group | null>(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', avatar: '' });
   const [isLoading, setIsLoading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const addFileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Initialize default groups if none exist
@@ -65,13 +70,15 @@ export function GroupManagement() {
     }
 
     setIsLoading(true);
-    const result = await createGroup(formData.name.trim(), formData.description.trim());
+    const result = await createGroup(formData.name.trim(), formData.description.trim(), avatarPreview || undefined);
     setIsLoading(false);
 
     if (result) {
       toast.success(`Group "${formData.name}" created`);
       setShowAddDialog(false);
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', description: '', avatar: '' });
+      setAvatarPreview('');
+      setAvatarFile(null);
     } else {
       toast.error('Failed to create group');
     }
@@ -84,13 +91,15 @@ export function GroupManagement() {
     }
 
     setIsLoading(true);
-    const result = await updateGroup(editingGroup.id, formData.name.trim(), formData.description.trim());
+    const result = await updateGroup(editingGroup.id, formData.name.trim(), formData.description.trim(), avatarPreview || undefined);
     setIsLoading(false);
 
     if (result) {
       toast.success(`Group "${formData.name}" updated`);
       setEditingGroup(null);
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', description: '', avatar: '' });
+      setAvatarPreview('');
+      setAvatarFile(null);
     } else {
       toast.error('Failed to update group');
     }
@@ -112,7 +121,9 @@ export function GroupManagement() {
   };
 
   const openEditDialog = (group: Group) => {
-    setFormData({ name: group.name, description: group.description });
+    setFormData({ name: group.name, description: group.description, avatar: group.avatar || '' });
+    setAvatarPreview(group.avatar || '');
+    setAvatarFile(null);
     setEditingGroup(group);
   };
 
@@ -128,7 +139,9 @@ export function GroupManagement() {
           size="sm" 
           className="gap-1"
           onClick={() => {
-            setFormData({ name: '', description: '' });
+            setFormData({ name: '', description: '', avatar: '' });
+            setAvatarPreview('');
+            setAvatarFile(null);
             setShowAddDialog(true);
           }}
         >
@@ -152,11 +165,22 @@ export function GroupManagement() {
               key={group.id}
               className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
             >
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-card-foreground truncate">{group.name}</p>
-                {group.description && (
-                  <p className="text-xs text-muted-foreground truncate">{group.description}</p>
-                )}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="h-10 w-10 rounded-full overflow-hidden bg-muted flex items-center justify-center border">
+                  {group.avatar ? (
+                    <img src={group.avatar} alt={group.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-sm font-semibold text-muted-foreground">
+                      {group.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-card-foreground truncate">{group.name}</p>
+                  {group.description && (
+                    <p className="text-xs text-muted-foreground truncate">{group.description}</p>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1 ml-2">
                 <Button 
@@ -201,13 +225,38 @@ export function GroupManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="groupDesc">Description (Optional)</Label>
-              <Input
-                id="groupDesc"
-                placeholder="Brief description of the group"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              />
+              <Label>Group Avatar (Optional)</Label>
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 rounded-full overflow-hidden bg-muted flex items-center justify-center border">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <input
+                    ref={addFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      if (!file) return;
+                      if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+                      if (file.size > 2 * 1024 * 1024) { toast.error('Image must be less than 2MB'); return; }
+                      setAvatarFile(file);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  <Button type="button" variant="secondary" className="gap-2" onClick={() => addFileInputRef.current?.click()}>
+                    <Camera className="h-4 w-4" />
+                    Choose Image
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -241,13 +290,38 @@ export function GroupManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="editGroupDesc">Description (Optional)</Label>
-              <Input
-                id="editGroupDesc"
-                placeholder="Brief description of the group"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              />
+              <Label>Group Avatar (Optional)</Label>
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 rounded-full overflow-hidden bg-muted flex items-center justify-center border">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      if (!file) return;
+                      if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+                      if (file.size > 2 * 1024 * 1024) { toast.error('Image must be less than 2MB'); return; }
+                      setAvatarFile(file);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  <Button type="button" variant="secondary" className="gap-2" onClick={() => editFileInputRef.current?.click()}>
+                    <Camera className="h-4 w-4" />
+                    Choose Image
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>

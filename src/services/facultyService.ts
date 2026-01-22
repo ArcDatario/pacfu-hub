@@ -32,7 +32,8 @@ export const getAllFaculty = async (): Promise<FacultyMember[]> => {
         isActive: data.isActive,
         joinedDate: data.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
         groups: data.groups || [],
-      };
+        avatar: data.avatar || undefined,
+      } as FacultyMember;
     });
   } catch (error) {
     console.error('Error fetching faculty:', error);
@@ -57,7 +58,8 @@ export const subscribeFaculty = (callback: (faculty: FacultyMember[]) => void) =
         isActive: data.isActive,
         joinedDate: data.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
         groups: data.groups || [],
-      };
+        avatar: data.avatar || undefined,
+      } as FacultyMember;
     });
     callback(faculty);
   });

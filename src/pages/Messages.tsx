@@ -47,7 +47,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 export default function Messages() {
@@ -149,7 +149,11 @@ export default function Messages() {
   // Get avatar for a chat (returns image URL or first letter)
   const getChatAvatar = useCallback((chat: Chat): { type: 'image' | 'text'; value: string } => {
     if (chat.type === 'group') {
-      return { type: 'text', value: chat.avatar || chat.name?.charAt(0).toUpperCase() || 'G' };
+      const ava = chat.avatar;
+      if (typeof ava === 'string' && (ava.startsWith('data:image') || ava.startsWith('http'))) {
+        return { type: 'image', value: ava };
+      }
+      return { type: 'text', value: chat.name?.charAt(0).toUpperCase() || 'G' };
     }
     
     // For direct chats, use the other person's avatar or first initial
@@ -290,6 +294,32 @@ export default function Messages() {
   const filteredConversations = conversations.filter(conv =>
     getChatDisplayName(conv).toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Backfill lastMessage previews for chats that have messages but empty preview
+  useEffect(() => {
+    const backfill = async () => {
+      try {
+        const targets = conversations.filter(c => !c.lastMessage);
+        for (const chat of targets) {
+          const msgsRef = collection(db, 'chats', chat.id, 'messages');
+          const qMsgs = query(msgsRef, orderBy('timestamp', 'desc'), limit(1));
+          const snap = await getDocs(qMsgs);
+          if (!snap.empty) {
+            const last = snap.docs[0].data() as any;
+            await updateDoc(doc(db, 'chats', chat.id), {
+              lastMessage: last.content || '',
+              lastMessageTime: last.timestamp || serverTimestamp(),
+              lastMessageSenderId: last.senderId || '',
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Error backfilling chat previews:', e);
+      }
+    };
+
+    if (conversations.length > 0) backfill();
+  }, [conversations]);
 
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedChat || !user) return;
@@ -434,6 +464,93 @@ export default function Messages() {
     checkDeleted();
   }, [selectedChat, isOtherParticipantDeleted]);
 
+  // Ensure group chats exist and include the current user based on their assigned groups
+  useEffect(() => {
+    if (!user) return;
+
+    const syncGroupsToChats = async () => {
+      try {
+        // Fetch the current user's groups from Firestore
+        const userSnap = await getDoc(doc(db, 'users', user.id));
+        const userData = userSnap.exists() ? userSnap.data() as any : null;
+        const userGroups: string[] = Array.isArray(userData?.groups) ? userData.groups : [];
+        if (userGroups.length === 0) return;
+
+        const chatsRef = collection(db, 'chats');
+
+        for (const groupName of userGroups) {
+          // Get group avatar from groups collection
+          const groupsRef = collection(db, 'groups');
+          const groupQ = query(groupsRef, where('name', '==', groupName));
+          const groupSnap = await getDocs(groupQ);
+          const groupAvatar = groupSnap.empty ? undefined : (groupSnap.docs[0].data() as any).avatar;
+
+          // Find existing chat by group name (avoid composite indexes by querying only by name)
+          const existingQ = query(chatsRef, where('name', '==', groupName));
+          const existingSnap = await getDocs(existingQ);
+          const existingDoc = existingSnap.docs.find(d => (d.data() as any).type === 'group');
+
+          if (existingDoc) {
+            const data = existingDoc.data() as any;
+            const participants: string[] = Array.isArray(data.participants) ? data.participants : [];
+            const participantNames: Record<string, string> = data.participantNames || {};
+
+            // Ensure current user is a participant
+            if (!participants.includes(user.id)) {
+              await updateDoc(existingDoc.ref, {
+                participants: [...participants, user.id],
+                participantNames: {
+                  ...participantNames,
+                  [user.id]: user.name,
+                },
+              });
+            }
+
+            // Sync avatar from group document if available
+            const desiredAvatar = groupAvatar || groupName.charAt(0).toUpperCase();
+            if (data.avatar !== desiredAvatar) {
+              await updateDoc(existingDoc.ref, { avatar: desiredAvatar });
+            }
+          } else {
+            // Create a new group chat document and include all members who have this group
+            const usersRef = collection(db, 'users');
+            const membersQ = query(usersRef, where('groups', 'array-contains', groupName));
+            const membersSnap = await getDocs(membersQ);
+
+            const memberIds: string[] = [];
+            const memberNames: Record<string, string> = {};
+            membersSnap.docs.forEach(udoc => {
+              const d = udoc.data() as any;
+              memberIds.push(udoc.id);
+              memberNames[udoc.id] = d.name || 'User';
+            });
+            if (!memberIds.includes(user.id)) {
+              memberIds.push(user.id);
+              memberNames[user.id] = user.name;
+            }
+
+            await addDoc(chatsRef, {
+              type: 'group',
+              name: groupName,
+              description: '',
+              participants: memberIds,
+              participantNames: memberNames,
+              createdBy: user.id,
+              createdAt: serverTimestamp(),
+              lastMessage: '',
+              lastMessageTime: serverTimestamp(),
+              avatar: groupAvatar || groupName.charAt(0).toUpperCase(),
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Error syncing group chats for user:', e);
+      }
+    };
+
+    syncGroupsToChats();
+  }, [user]);
+
   return (
     <DashboardLayout>
       <div className="flex h-[calc(100vh-7rem)] gap-6">
@@ -540,12 +657,12 @@ export default function Messages() {
                           ? "bg-primary text-primary-foreground" 
                           : "bg-accent"
                       )}>
-                        {conv.type === 'group' ? (
-                          <Users className="h-5 w-5" />
-                        ) : avatar.type === 'image' ? (
+                        {avatar.type === 'image' ? (
                           <img src={avatar.value} alt={displayName} className="h-full w-full object-cover" />
                         ) : (
-                          <span className="text-accent-foreground">{avatar.value}</span>
+                          <span className={cn(
+                            conv.type === 'group' ? 'text-primary-foreground' : 'text-accent-foreground'
+                          )}>{avatar.value}</span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -596,14 +713,14 @@ export default function Messages() {
                       ? "bg-primary text-primary-foreground"
                       : "bg-accent"
                   )}>
-                    {selectedChat.type === 'group' ? (
-                      <Users className="h-5 w-5" />
-                    ) : (() => {
+                    {(() => {
                       const avatar = getChatAvatar(selectedChat);
                       return avatar.type === 'image' ? (
                         <img src={avatar.value} alt={getChatDisplayName(selectedChat)} className="h-full w-full object-cover" />
                       ) : (
-                        <span className="text-accent-foreground">{avatar.value}</span>
+                        <span className={cn(
+                          selectedChat.type === 'group' ? 'text-primary-foreground' : 'text-accent-foreground'
+                        )}>{avatar.value}</span>
                       );
                     })()}
                   </div>
