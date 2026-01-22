@@ -8,6 +8,9 @@ export interface User {
   avatar?: string;
   isActive: boolean;
   createdAt: Date;
+  department?: string;
+  position?: string;
+  groups?: string[];
 }
 
 export interface AuthState {
