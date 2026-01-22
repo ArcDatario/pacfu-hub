@@ -18,10 +18,24 @@ import { FacultyMember } from '@/types/faculty';
 export const getAllFaculty = async (): Promise<FacultyMember[]> => {
   try {
     const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('role', '==', 'faculty'), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
+    // Try with orderBy first, fallback to simple query if index doesn't exist
+    let q = query(usersRef, where('role', '==', 'faculty'), orderBy('createdAt', 'desc'));
+    let snapshot;
     
-    return snapshot.docs.map(doc => {
+    try {
+      snapshot = await getDocs(q);
+    } catch (error: any) {
+      // If error is about missing index, use simple query
+      if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
+        console.warn('Composite index may not exist. Using simple query. Create index: users(role, createdAt)');
+        q = query(usersRef, where('role', '==', 'faculty'));
+        snapshot = await getDocs(q);
+      } else {
+        throw error;
+      }
+    }
+    
+    const faculty = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -35,6 +49,17 @@ export const getAllFaculty = async (): Promise<FacultyMember[]> => {
         avatar: data.avatar || undefined,
       } as FacultyMember;
     });
+
+    // Sort manually if orderBy wasn't used
+    if (faculty.length > 0 && faculty[0].joinedDate) {
+      return faculty.sort((a, b) => {
+        const aDate = new Date(a.joinedDate).getTime();
+        const bDate = new Date(b.joinedDate).getTime();
+        return bDate - aDate; // Descending order
+      });
+    }
+
+    return faculty;
   } catch (error) {
     console.error('Error fetching faculty:', error);
     return [];

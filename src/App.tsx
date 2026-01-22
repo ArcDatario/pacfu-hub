@@ -12,6 +12,7 @@ import Announcements from "./pages/Announcements";
 import Documents from "./pages/Documents";
 import Polls from "./pages/Polls";
 import Elections from "./pages/Elections";
+import CreateElection from "./pages/CreateElection";
 import Faculty from "./pages/Faculty";
 import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/documents" element={<Documents />} />
               <Route path="/polls" element={<Polls />} />
               <Route path="/elections" element={<Elections />} />
+              <Route path="/elections/create" element={<CreateElection />} />
               <Route path="/faculty" element={<Faculty />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
