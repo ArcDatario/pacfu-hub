@@ -141,18 +141,14 @@ export const getUserData = async (uid: string): Promise<User | null> => {
     if (!userDoc.exists()) return null;
     
     const data = userDoc.data();
-    console.log('User data from Firestore:', { uid, hasAvatar: !!data.avatar });
     return {
       id: uid,
       email: data.email,
       name: data.name,
       role: data.role,
-      avatar: data.avatar ?? undefined,
+      avatar: data.avatar || undefined,
       isActive: data.isActive,
       createdAt: data.createdAt?.toDate() || new Date(),
-      department: data.department,
-      position: data.position,
-      groups: data.groups || [],
     };
   } catch (error) {
     console.error('Error getting user data:', error);
