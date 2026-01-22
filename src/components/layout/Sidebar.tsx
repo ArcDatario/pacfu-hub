@@ -88,10 +88,18 @@ export function Sidebar() {
           {/* User Section */}
           <div className="border-t border-sidebar-border p-4">
             <div className="mb-3 flex items-center gap-3 px-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent">
-                <span className="text-sm font-medium text-sidebar-accent-foreground">
-                  {user?.name?.charAt(0) || 'U'}
-                </span>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent overflow-hidden">
+                {user?.avatar ? (
+                  <img 
+                    src={user.avatar} 
+                    alt={user.name} 
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-sidebar-accent-foreground">
+                    {user?.name?.charAt(0) || 'U'}
+                  </span>
+                )}
               </div>
               <div className="flex-1 overflow-hidden">
                 <p className="truncate text-sm font-medium text-sidebar-foreground">
