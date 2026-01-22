@@ -13,6 +13,7 @@ import {
   calculateWinners,
   hasUserVoted,
   endElection,
+  updateAllElectionStatuses,
 } from '@/services/electionService';
 import { Election, ElectionWithVotes, Vote } from '@/types/election';
 import { Plus, Vote as VoteIcon, Calendar, Trophy, Users, CheckCircle, BarChart3, Clock, XCircle } from 'lucide-react';
@@ -46,6 +47,19 @@ export default function Elections() {
       setElections(electionsList);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Automatically update election statuses every minute
+  useEffect(() => {
+    // Update immediately on mount
+    updateAllElectionStatuses();
+
+    // Then update every minute
+    const interval = setInterval(() => {
+      updateAllElectionStatuses();
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   // Subscribe to votes and update election data
@@ -126,11 +140,13 @@ export default function Elections() {
       if (success) {
         toast.success('Election ended successfully');
         // Refresh the specific election
-        const updated = await getElectionWithVotes(electionId, user?.id);
-        if (updated) {
-          setElectionsWithVotes((prev) =>
-            prev.map((e) => (e.id === electionId ? updated : e))
-          );
+        if (user) {
+          const updated = await getElectionWithVotes(electionId, user.id);
+          if (updated) {
+            setElectionsWithVotes((prev) =>
+              prev.map((e) => (e.id === electionId ? updated : e))
+            );
+          }
         }
       } else {
         toast.error('Failed to end election');
@@ -213,7 +229,7 @@ function ElectionCard({
   const { getFacultyById } = useFaculty();
   const [uniqueVoters, setUniqueVoters] = useState<Set<string>>(new Set());
   
-  // Calculate unique voters from votes - FIXED: Include ALL votes (including participation_only)
+  // Calculate unique voters from votes
   useEffect(() => {
     if (election.votes && election.votes.length > 0) {
       const uniqueUserIds = new Set(election.votes.map(vote => vote.userId));
@@ -306,7 +322,7 @@ function ElectionCard({
           </div>
         </div>
 
-        {/* Progress Bar for Active Elections - Now shows voting participation */}
+        {/* Progress Bar for Active Elections */}
         {election.status === 'active' && (
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground">

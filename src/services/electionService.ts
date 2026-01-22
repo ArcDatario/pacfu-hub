@@ -124,13 +124,16 @@ export const getElectionById = async (electionId: string): Promise<Election | nu
     const startDate = toDate(data.startDate);
     const endDate = toDate(data.endDate);
 
+    // Always recalculate status based on current time and dates
+    const currentStatus = getElectionStatus(startDate, endDate);
+
     return {
       id: electionSnap.id,
       title: data.title,
       description: data.description,
       startDate,
       endDate,
-      status: getElectionStatus(startDate, endDate),
+      status: currentStatus,
       positions: data.positions || [],
       createdAt: toDate(data.createdAt),
       createdBy: data.createdBy,
@@ -154,13 +157,16 @@ export const subscribeElections = (
       const startDate = toDate(data.startDate);
       const endDate = toDate(data.endDate);
 
+      // Always recalculate status based on current time
+      const currentStatus = getElectionStatus(startDate, endDate);
+
       return {
         id: doc.id,
         title: data.title,
         description: data.description,
         startDate,
         endDate,
-        status: getElectionStatus(startDate, endDate),
+        status: currentStatus,
         positions: data.positions || [],
         createdAt: toDate(data.createdAt),
         createdBy: data.createdBy,
@@ -288,7 +294,6 @@ export const hasUserVoted = async (electionId: string, userId: string): Promise<
   }
 };
 
-// Cast votes for an election (one vote per position)
 // Cast votes for an election (allows empty votes for "None" selections)
 export const castVotes = async (
   electionId: string,
@@ -326,8 +331,8 @@ export const castVotes = async (
       batch.set(voteRef, {
         electionId,
         userId,
-        positionId: 'participation_only',  // Special position ID for participation tracking
-        candidateId: 'abstained',          // Special candidate ID to indicate abstention
+        positionId: 'participation_only',
+        candidateId: 'abstained',
         timestamp: Timestamp.now(),
       });
     }
@@ -340,7 +345,6 @@ export const castVotes = async (
   }
 };
 
-// Calculate vote counts for an election
 // Calculate vote counts for an election (updated to filter out participation-only votes)
 export const calculateVoteCounts = (votes: Vote[]): Record<string, Record<string, number>> => {
   const counts: Record<string, Record<string, number>> = {};
@@ -384,7 +388,6 @@ export const calculateWinners = (
 };
 
 // Get election with votes and statistics
-// Get election with votes and statistics
 export const getElectionWithVotes = async (
   electionId: string,
   userId?: string
@@ -409,7 +412,7 @@ export const getElectionWithVotes = async (
 
     return {
       ...election,
-      votes,  // This includes ALL votes (including abstentions)
+      votes,
       hasVoted,
       voteCounts,
       winners,
@@ -432,29 +435,50 @@ export const updateElectionStatus = async (electionId: string): Promise<void> =>
       election.endDate instanceof Date ? election.endDate : new Date(election.endDate)
     );
 
-    if (newStatus !== election.status) {
-      const electionRef = doc(db, 'elections', electionId);
+    // Get current status from Firestore
+    const electionRef = doc(db, 'elections', electionId);
+    const electionSnap = await getDoc(electionRef);
+    const currentStoredStatus = electionSnap.data()?.status;
+
+    // Only update if status has changed
+    if (newStatus !== currentStoredStatus) {
       await updateDoc(electionRef, { status: newStatus });
+      console.log(`Election ${electionId} status updated from ${currentStoredStatus} to ${newStatus}`);
     }
   } catch (error) {
     console.error('Error updating election status:', error);
   }
 };
 
-// End election manually (admin only)
+// End election manually (admin only) - FIXED VERSION
 export const endElection = async (electionId: string): Promise<boolean> => {
   try {
-    const election = await getElectionById(electionId);
-    if (!election) return false;
-
     const electionRef = doc(db, 'elections', electionId);
+    
+    // Update the end date to now and set status to ended
     await updateDoc(electionRef, { 
       status: 'ended',
+      endDate: Timestamp.now(), // Set end date to now so it's automatically ended
       endedAt: Timestamp.now(),
     });
+    
+    console.log(`Election ${electionId} ended manually by admin`);
     return true;
   } catch (error) {
     console.error('Error ending election:', error);
     return false;
+  }
+};
+
+// Check and update all election statuses (can be called periodically)
+export const updateAllElectionStatuses = async (): Promise<void> => {
+  try {
+    const elections = await getAllElections();
+    
+    for (const election of elections) {
+      await updateElectionStatus(election.id);
+    }
+  } catch (error) {
+    console.error('Error updating all election statuses:', error);
   }
 };
