@@ -124,19 +124,27 @@ export default function Messages() {
     return chat.name || 'Direct Chat';
   }, [user, facultyMembers]);
 
-  // Get avatar for a chat
-  const getChatAvatar = useCallback((chat: Chat): string => {
+  // Get avatar for a chat (returns image URL or first letter)
+  const getChatAvatar = useCallback((chat: Chat): { type: 'image' | 'text'; value: string } => {
     if (chat.type === 'group') {
-      return chat.avatar || chat.name?.charAt(0).toUpperCase() || 'G';
+      return { type: 'text', value: chat.avatar || chat.name?.charAt(0).toUpperCase() || 'G' };
     }
     
-    // For direct chats, use the other person's first initial
+    // For direct chats, use the other person's avatar or first initial
     if (chat.type === 'direct' && user) {
+      const otherParticipantId = chat.participants.find(id => id !== user.id);
+      if (otherParticipantId) {
+        // Check if there's a stored avatar for this participant
+        const participantAvatars = (chat as any).participantAvatars;
+        if (participantAvatars && participantAvatars[otherParticipantId]) {
+          return { type: 'image', value: participantAvatars[otherParticipantId] };
+        }
+      }
       const displayName = getChatDisplayName(chat);
-      return displayName.charAt(0).toUpperCase();
+      return { type: 'text', value: displayName.charAt(0).toUpperCase() };
     }
     
-    return chat.avatar || 'U';
+    return { type: 'text', value: chat.avatar || 'U' };
   }, [user, getChatDisplayName]);
 
   // Subscribe to chats
@@ -447,15 +455,18 @@ export default function Messages() {
                   >
                     <div className="flex items-start gap-3">
                       <div className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-full font-medium",
+                        "flex h-10 w-10 items-center justify-center rounded-full font-medium overflow-hidden",
                         conv.type === 'group' 
                           ? "bg-primary text-primary-foreground" 
                           : "bg-accent text-accent-foreground"
                       )}>
-                        {conv.type === 'group' 
-                          ? <Users className="h-5 w-5" /> 
-                          : avatar
-                        }
+                        {conv.type === 'group' ? (
+                          <Users className="h-5 w-5" />
+                        ) : avatar.type === 'image' ? (
+                          <img src={avatar.value} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          avatar.value
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
@@ -500,15 +511,21 @@ export default function Messages() {
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                   <div className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full font-medium",
+                    "flex h-10 w-10 items-center justify-center rounded-full font-medium overflow-hidden",
                     selectedChat.type === 'group'
                       ? "bg-primary text-primary-foreground"
                       : "bg-accent text-accent-foreground"
                   )}>
-                    {selectedChat.type === 'group' 
-                      ? <Users className="h-5 w-5" /> 
-                      : getChatAvatar(selectedChat)
-                    }
+                    {selectedChat.type === 'group' ? (
+                      <Users className="h-5 w-5" />
+                    ) : (() => {
+                      const avatar = getChatAvatar(selectedChat);
+                      return avatar.type === 'image' ? (
+                        <img src={avatar.value} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        avatar.value
+                      );
+                    })()}
                   </div>
                   <div>
                     <h3 className="font-medium text-card-foreground">

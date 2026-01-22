@@ -13,6 +13,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   createFaculty: (email: string, password: string, name: string, department: string, position: string, groups?: string[]) => Promise<{ success: boolean; error?: string }>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,6 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const refreshUser = async () => {
+    if (!authState.user) return;
+    
+    const userData = await getUserData(authState.user.id);
+    if (userData) {
+      setAuthState(prev => ({
+        ...prev,
+        user: userData,
+      }));
+    }
+  };
+
   const createFaculty = async (
     email: string, 
     password: string, 
@@ -114,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout, createFaculty }}>
+    <AuthContext.Provider value={{ ...authState, login, logout, createFaculty, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

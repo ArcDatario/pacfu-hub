@@ -146,6 +146,7 @@ export const getUserData = async (uid: string): Promise<User | null> => {
       email: data.email,
       name: data.name,
       role: data.role,
+      avatar: data.avatar || undefined,
       isActive: data.isActive,
       createdAt: data.createdAt?.toDate() || new Date(),
     };
