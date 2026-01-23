@@ -206,16 +206,23 @@ export function PollCard({ poll, onVote }: PollCardProps) {
           </span>
         </div>
 
-        {poll.status === 'active' && !hasVoted && (
+        {/* Only faculty can vote - admins can only manage polls */}
+        {!isAdmin && poll.status === 'active' && !hasVoted && (
           <Button className="w-full mt-4" onClick={() => onVote?.(poll)}>
             <Vote className="h-4 w-4 mr-2" />
             Cast Your Vote
           </Button>
         )}
 
-        {hasVoted && poll.status === 'active' && (
+        {!isAdmin && hasVoted && poll.status === 'active' && (
           <p className="text-center text-sm text-muted-foreground mt-4">
             ✓ You've voted in this poll
+          </p>
+        )}
+
+        {isAdmin && poll.status === 'active' && (
+          <p className="text-center text-sm text-muted-foreground mt-4">
+            Admins can only manage polls, not vote
           </p>
         )}
       </div>
