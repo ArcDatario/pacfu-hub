@@ -9,11 +9,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Upload, File as FileIcon, X, AlertCircle } from 'lucide-react';
-import { uploadFile, validateFileSize, getMaxFileSizeMB } from '@/services/documentService';
+import { Upload, File as FileIcon, X } from 'lucide-react';
+import { uploadFile } from '@/services/documentService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface UploadFileDialogProps {
   open: boolean;
@@ -33,29 +32,8 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      const validFiles: globalThis.File[] = [];
-      const invalidFiles: string[] = [];
-      
-      newFiles.forEach(file => {
-        if (validateFileSize(file)) {
-          validFiles.push(file);
-        } else {
-          invalidFiles.push(file.name);
-        }
-      });
-      
-      if (invalidFiles.length > 0) {
-        toast({
-          title: 'Files too large',
-          description: `${invalidFiles.join(', ')} exceed the ${getMaxFileSizeMB()}MB limit`,
-          variant: 'destructive',
-        });
-      }
-      
-      if (validFiles.length > 0) {
-        setFiles(prev => [...prev, ...validFiles]);
-        setProgress(prev => [...prev, ...validFiles.map(() => 0)]);
-      }
+      setFiles(prev => [...prev, ...newFiles]);
+      setProgress(prev => [...prev, ...newFiles.map(() => 0)]);
     }
   };
 
@@ -118,29 +96,8 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
     e.preventDefault();
     if (e.dataTransfer.files) {
       const newFiles = Array.from(e.dataTransfer.files);
-      const validFiles: globalThis.File[] = [];
-      const invalidFiles: string[] = [];
-      
-      newFiles.forEach(file => {
-        if (validateFileSize(file)) {
-          validFiles.push(file);
-        } else {
-          invalidFiles.push(file.name);
-        }
-      });
-      
-      if (invalidFiles.length > 0) {
-        toast({
-          title: 'Files too large',
-          description: `${invalidFiles.join(', ')} exceed the ${getMaxFileSizeMB()}MB limit`,
-          variant: 'destructive',
-        });
-      }
-      
-      if (validFiles.length > 0) {
-        setFiles(prev => [...prev, ...validFiles]);
-        setProgress(prev => [...prev, ...validFiles.map(() => 0)]);
-      }
+      setFiles(prev => [...prev, ...newFiles]);
+      setProgress(prev => [...prev, ...newFiles.map(() => 0)]);
     }
   };
 
@@ -171,7 +128,7 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
               Drag files here or click to browse
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Maximum file size: {getMaxFileSizeMB()}MB
+              Maximum file size: 50MB
             </p>
             <input
               ref={fileInputRef}
