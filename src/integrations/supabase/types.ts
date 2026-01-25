@@ -14,7 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      documents: {
+        Row: {
+          created_at: string
+          created_by: string
+          created_by_name: string
+          id: string
+          mime_type: string | null
+          name: string
+          parent_id: string | null
+          shared: boolean
+          size: number | null
+          size_formatted: string | null
+          storage_path: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          created_by_name: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          parent_id?: string | null
+          shared?: boolean
+          size?: number | null
+          size_formatted?: string | null
+          storage_path?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          created_by_name?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          parent_id?: string | null
+          shared?: boolean
+          size?: number | null
+          size_formatted?: string | null
+          storage_path?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
