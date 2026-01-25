@@ -7,7 +7,6 @@ import {
   doc, 
   query, 
   where, 
-  orderBy, 
   onSnapshot,
   getDoc,
   Timestamp,
@@ -28,18 +27,17 @@ export const subscribeToDocuments = (
   parentId: string | null,
   callback: (docs: Document[]) => void
 ) => {
+  // Simple query without multiple orderBy to avoid needing composite index
   const q = query(
     collection(db, COLLECTION_NAME),
-    where('parentId', '==', parentId),
-    orderBy('type', 'asc'), // folders first
-    orderBy('name', 'asc')
+    where('parentId', '==', parentId)
   );
 
   return onSnapshot(q, (snapshot) => {
-    const documents: Document[] = snapshot.docs.map((doc) => {
-      const data = doc.data();
+    const documents: Document[] = snapshot.docs.map((docSnap) => {
+      const data = docSnap.data();
       return {
-        id: doc.id,
+        id: docSnap.id,
         name: data.name,
         type: data.type,
         size: data.size,
@@ -56,11 +54,20 @@ export const subscribeToDocuments = (
         sharedWith: data.sharedWith || [],
       };
     });
+    
+    // Sort client-side: folders first, then by name
+    documents.sort((a, b) => {
+      if (a.type === 'folder' && b.type !== 'folder') return -1;
+      if (a.type !== 'folder' && b.type === 'folder') return 1;
+      return a.name.localeCompare(b.name);
+    });
+    
     callback(documents);
+  }, (error) => {
+    console.error('Error fetching documents:', error);
+    callback([]);
   });
 };
-
-// Get a single document/folder by ID
 export const getDocument = async (docId: string): Promise<Document | null> => {
   const docRef = doc(db, COLLECTION_NAME, docId);
   const docSnap = await getDoc(docRef);
