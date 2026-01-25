@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Upload, File, X } from 'lucide-react';
+import { Upload, File as FileIcon, X } from 'lucide-react';
 import { uploadFile } from '@/services/documentService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
@@ -22,7 +22,9 @@ interface UploadFileDialogProps {
 
 export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDialogProps) {
   const { user } = useAuth();
-  const [files, setFiles] = useState<File[]>([]);
+  // IMPORTANT: use the browser File type here. We also import a Lucide icon named `File`,
+  // so we alias it to `FileIcon` above to avoid breaking uploads.
+  const [files, setFiles] = useState<globalThis.File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -145,7 +147,7 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
                   key={index}
                   className="flex items-center gap-3 p-3 bg-muted rounded-lg"
                 >
-                  <File className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{file.name}</p>
                     <p className="text-xs text-muted-foreground">
