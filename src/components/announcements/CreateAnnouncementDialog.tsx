@@ -23,7 +23,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { createAnnouncement, getFacultyEmails } from '@/services/announcementService';
+import { createAnnouncement, getFacultyEmails, sendAnnouncementNotification } from '@/services/announcementService';
 import { AnnouncementCategory } from '@/types/announcement';
 import { Loader2 } from 'lucide-react';
 
@@ -86,19 +86,36 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
         user.name
       );
 
-      // If notifications are enabled, notify faculty
+      // If notifications are enabled, send email to faculty
       if (data.sendNotification) {
         try {
           const facultyList = await getFacultyEmails();
-          console.log('Would notify faculty:', facultyList);
-          // Note: Push notifications and emails would be handled by a backend service
-          // For now, we'll just log the faculty list
-          toast({
-            title: 'Notification sent',
-            description: `${facultyList.length} faculty members will be notified.`,
-          });
+          
+          if (facultyList.length > 0) {
+            const result = await sendAnnouncementNotification(facultyList, {
+              title: data.title,
+              content: data.content,
+              category: data.category,
+              author: user.name,
+            });
+            
+            if (result.success) {
+              toast({
+                title: 'Notifications sent',
+                description: result.message,
+              });
+            } else {
+              toast({
+                title: 'Notification warning',
+                description: `Announcement published, but email notifications failed: ${result.message}`,
+                variant: 'destructive',
+              });
+            }
+          } else {
+            console.log('No active faculty members to notify');
+          }
         } catch (error) {
-          console.error('Error getting faculty list:', error);
+          console.error('Error sending notifications:', error);
         }
       }
 

@@ -116,3 +116,43 @@ export const getFacultyEmails = async (): Promise<{ email: string; name: string 
     name: doc.data().name,
   }));
 };
+
+// Send announcement notification emails
+export const sendAnnouncementNotification = async (
+  recipients: { email: string; name: string }[],
+  announcement: {
+    title: string;
+    content: string;
+    category: string;
+    author: string;
+  }
+): Promise<{ success: boolean; message: string }> => {
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-announcement-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipients, announcement }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to send emails');
+    }
+
+    const result = await response.json();
+    return { 
+      success: true, 
+      message: `${result.successCount} email(s) sent successfully` 
+    };
+  } catch (error: any) {
+    console.error('Error sending announcement notifications:', error);
+    return { 
+      success: false, 
+      message: error.message || 'Failed to send notifications' 
+    };
+  }
+};
