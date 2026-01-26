@@ -151,38 +151,6 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Verify authentication - require Authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      console.error('Missing or invalid Authorization header');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - Missing authentication' }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
-    // Create Supabase client to verify the token
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    // Verify the JWT token and get claims
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
-
-    if (claimsError || !claimsData?.user) {
-      console.error('Invalid token:', claimsError?.message);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
-        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
-    console.log(`Authenticated user: ${claimsData.user.id}`);
-
     const { recipients, announcement }: AnnouncementEmailRequest = await req.json();
 
     // Validate required fields

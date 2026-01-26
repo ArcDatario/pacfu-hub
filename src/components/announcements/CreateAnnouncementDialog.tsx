@@ -89,15 +89,21 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       // If notifications are enabled, send email to faculty
       if (data.sendNotification) {
         try {
+          console.log('Fetching faculty emails...');
           const facultyList = await getFacultyEmails();
           
+          console.log('Faculty list:', facultyList);
+          
           if (facultyList.length > 0) {
+            console.log('Sending notifications to', facultyList.length, 'faculty members');
             const result = await sendAnnouncementNotification(facultyList, {
               title: data.title,
               content: data.content,
               category: data.category,
               author: user.name,
             });
+            
+            console.log('Notification result:', result);
             
             if (result.success) {
               toast({
@@ -112,10 +118,20 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
               });
             }
           } else {
-            console.log('No active faculty members to notify');
+            console.warn('No active faculty members found to notify');
+            toast({
+              title: 'No faculty found',
+              description: 'No active faculty members were found to send notifications to.',
+              variant: 'destructive',
+            });
           }
         } catch (error) {
           console.error('Error sending notifications:', error);
+          toast({
+            title: 'Notification error',
+            description: `Failed to send notifications: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            variant: 'destructive',
+          });
         }
       }
 
