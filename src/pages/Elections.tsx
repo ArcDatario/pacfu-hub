@@ -15,6 +15,7 @@ import {
   endElection,
   updateAllElectionStatuses,
 } from '@/services/electionService';
+import { logElectionAction } from '@/services/logService';
 import { Election, ElectionWithVotes, Vote } from '@/types/election';
 import { Plus, Vote as VoteIcon, Calendar, Trophy, Users, CheckCircle, BarChart3, Clock, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -132,21 +133,22 @@ export default function Elections() {
     setVotingElection(null);
   };
 
-  const handleEndElection = async (electionId: string) => {
-    if (!isAdmin) return;
+  const handleEndElection = async (electionId: string, electionTitle: string) => {
+    if (!isAdmin || !user) return;
     
     if (window.confirm('Are you sure you want to end this election? This action cannot be undone.')) {
       const success = await endElection(electionId);
       if (success) {
+        // Log the action
+        await logElectionAction('ended', electionTitle, user.id, user.name);
+        
         toast.success('Election ended successfully');
         // Refresh the specific election
-        if (user) {
-          const updated = await getElectionWithVotes(electionId, user.id);
-          if (updated) {
-            setElectionsWithVotes((prev) =>
-              prev.map((e) => (e.id === electionId ? updated : e))
-            );
-          }
+        const updated = await getElectionWithVotes(electionId, user.id);
+        if (updated) {
+          setElectionsWithVotes((prev) =>
+            prev.map((e) => (e.id === electionId ? updated : e))
+          );
         }
       } else {
         toast.error('Failed to end election');
@@ -224,7 +226,7 @@ function ElectionCard({
   election: ElectionWithVotes;
   isAdmin: boolean;
   onVote: () => void;
-  onEndElection: (electionId: string) => Promise<void>;
+  onEndElection: (electionId: string, electionTitle: string) => Promise<void>;
 }) {
   const { getFacultyById } = useFaculty();
   const [uniqueVoters, setUniqueVoters] = useState<Set<string>>(new Set());
@@ -286,7 +288,7 @@ function ElectionCard({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => onEndElection(election.id)}
+                      onClick={() => onEndElection(election.id, election.title)}
                       className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/50"
                     >
                       <XCircle className="h-3 w-3" />

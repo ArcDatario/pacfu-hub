@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { useFaculty } from '@/contexts/FacultyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { logFacultyAction } from '@/services/logService';
 import { FacultyMember } from '@/types/faculty';
 import { Group, subscribeToGroups } from '@/services/groupService';
 
@@ -52,6 +54,7 @@ const positions = [
 ];
 
 export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDialogProps) {
+  const { user } = useAuth();
   const { updateFacultyDetails } = useFaculty();
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   const [formData, setFormData] = useState({
@@ -99,6 +102,13 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
       const success = await updateFacultyDetails(faculty.id, updateData, faculty);
       
       if (success) {
+        // Log the action
+        if (user) {
+          await logFacultyAction('updated', faculty.name, user.id, user.name, {
+            updatedFields: Object.keys(updateData),
+          });
+        }
+        
         toast.success('Faculty details updated successfully');
         onOpenChange(false);
       } else {

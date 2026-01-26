@@ -31,6 +31,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { logFacultyAction } from '@/services/logService';
 import { FacultyMember } from '@/types/faculty';
 
 export default function Faculty() {
@@ -62,8 +63,19 @@ export default function Faculty() {
   const activeCount = facultyMembers.filter(m => m.isActive).length;
   const inactiveCount = facultyMembers.filter(m => !m.isActive).length;
 
-  const handleToggleStatus = (memberId: string, memberName: string, currentStatus: boolean) => {
+  const handleToggleStatus = async (memberId: string, memberName: string, currentStatus: boolean) => {
     toggleFacultyStatus(memberId);
+    
+    // Log the action
+    if (user) {
+      await logFacultyAction(
+        currentStatus ? 'deactivated' : 'reactivated',
+        memberName,
+        user.id,
+        user.name
+      );
+    }
+    
     toast.success(`${memberName} has been ${currentStatus ? 'deactivated' : 'activated'}`);
   };
 
@@ -85,6 +97,17 @@ export default function Faculty() {
     if (selectedFaculty) {
       const success = await deleteFacultyMember(selectedFaculty.id);
       if (success) {
+        // Log the action
+        if (user) {
+          await logFacultyAction(
+            'deleted',
+            selectedFaculty.name,
+            user.id,
+            user.name,
+            { email: selectedFaculty.email, department: selectedFaculty.department }
+          );
+        }
+        
         toast.success(`${selectedFaculty.name} has been deleted successfully`);
         setShowDeleteDialog(false);
         setSelectedFaculty(null);

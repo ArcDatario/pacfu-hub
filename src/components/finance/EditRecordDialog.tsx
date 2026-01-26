@@ -27,7 +27,9 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { updateFinancialRecord } from '@/services/financeService';
+import { logFinanceAction } from '@/services/logService';
 import { FinancialRecord, TransactionType, incomeCategories, expenseCategories } from '@/types/finance';
 
 interface EditRecordDialogProps {
@@ -37,6 +39,7 @@ interface EditRecordDialogProps {
 }
 
 export function EditRecordDialog({ open, onOpenChange, record }: EditRecordDialogProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState<TransactionType>('income');
@@ -76,14 +79,27 @@ export function EditRecordDialog({ open, onOpenChange, record }: EditRecordDialo
 
     setLoading(true);
     try {
+      const parsedAmount = parseFloat(amount);
       await updateFinancialRecord(record.id, {
         type,
         description: description.trim(),
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category,
         transactionDate,
         referenceNumber: referenceNumber.trim() || undefined,
       });
+
+      // Log the action
+      if (user) {
+        await logFinanceAction(
+          'record_updated',
+          description.trim(),
+          parsedAmount,
+          user.id,
+          user.name,
+          { category, previousAmount: record.amount }
+        );
+      }
 
       toast({
         title: 'Success',

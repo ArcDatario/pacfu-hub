@@ -29,13 +29,13 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Announcements', href: '/announcements', icon: Megaphone },
-    { label: 'Messages', href: '/messages', icon: MessageSquare },
+  { label: 'Messages', href: '/messages', icon: MessageSquare },
   { label: 'Documents', href: '/documents', icon: FolderOpen },
   { label: 'Polls & Surveys', href: '/polls', icon: BarChart3 },
   { label: 'Elections', href: '/elections', icon: Vote },
   { label: 'Faculty Members', href: '/faculty', icon: Users, adminOnly: true },
   { label: 'Financial Records', href: '/finance', icon: DollarSign, adminOnly: true },
-  { label: 'Reports', href: '/reports', icon: FileText, adminOnly: true },
+  { label: 'Activity Logs', href: '/logs', icon: FileText, adminOnly: true },
 ];
 
 export function Sidebar() {
