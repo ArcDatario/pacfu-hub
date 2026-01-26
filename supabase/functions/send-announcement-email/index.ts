@@ -1,8 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "resend";
+import nodemailer from "npm:nodemailer@6.9.10";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -198,18 +196,27 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Input validation - sanitize announcement content
     const sanitizedAnnouncement = {
-      title: announcement.title.substring(0, 200), // Limit title length
-      content: announcement.content.substring(0, 5000), // Limit content length
+      title: announcement.title.substring(0, 200),
+      content: announcement.content.substring(0, 5000),
       category: ['general', 'urgent', 'event', 'memo'].includes(announcement.category) 
         ? announcement.category 
         : 'general',
-      author: announcement.author.substring(0, 100), // Limit author length
+      author: announcement.author.substring(0, 100),
     };
 
     // Limit number of recipients to prevent abuse
     const limitedRecipients = recipients.slice(0, 100);
 
     console.log(`Sending announcement email to ${limitedRecipients.length} recipients`);
+
+    // Create Nodemailer transporter with Gmail SMTP
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: Deno.env.get('SMTP_USER'),
+        pass: Deno.env.get('SMTP_PASS'),
+      },
+    });
 
     // Send emails to all recipients
     const emailPromises = limitedRecipients.map(async (recipient) => {
@@ -221,14 +228,16 @@ const handler = async (req: Request): Promise<Response> => {
           return { email: recipient.email, success: false, error: 'Invalid email format' };
         }
 
-        const result = await resend.emails.send({
-          from: "PACFU Portal <onboarding@resend.dev>",
-          to: [recipient.email],
+        const mailOptions = {
+          from: `"PACFU Portal" <${Deno.env.get('SMTP_USER')}>`,
+          to: recipient.email,
           subject: `📢 ${sanitizedAnnouncement.category === 'urgent' ? '🚨 URGENT: ' : ''}${sanitizedAnnouncement.title}`,
           html: generateEmailHtml(sanitizedAnnouncement, recipient.name?.substring(0, 100) || 'Faculty Member'),
-        });
-        console.log(`Email sent to ${recipient.email}:`, result);
-        return { email: recipient.email, success: true, result };
+        };
+
+        const result = await transporter.sendMail(mailOptions);
+        console.log(`Email sent to ${recipient.email}:`, result.messageId);
+        return { email: recipient.email, success: true, messageId: result.messageId };
       } catch (error: any) {
         console.error(`Failed to send email to ${recipient.email}:`, error);
         return { email: recipient.email, success: false, error: error.message };
