@@ -104,6 +104,7 @@ export const toggleAnnouncementPin = async (id: string, isPinned: boolean): Prom
 
 // Get all faculty emails for notifications
 export const getFacultyEmails = async (): Promise<{ email: string; name: string }[]> => {
+  console.log('Querying Firestore for faculty users...');
   const q = query(
     collection(db, 'users'),
     where('role', '==', 'faculty'),
@@ -111,10 +112,18 @@ export const getFacultyEmails = async (): Promise<{ email: string; name: string 
   );
   
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({
-    email: doc.data().email,
-    name: doc.data().name,
-  }));
+  console.log('Found', snapshot.docs.length, 'faculty members');
+  
+  const emails = snapshot.docs.map(doc => {
+    const data = doc.data();
+    console.log('Faculty member:', { email: data.email, name: data.name, role: data.role });
+    return {
+      email: data.email,
+      name: data.name,
+    };
+  });
+  
+  return emails;
 };
 
 // Send announcement notification emails
@@ -128,33 +137,41 @@ export const sendAnnouncementNotification = async (
   }
 ): Promise<{ success: boolean; message: string }> => {
   try {
+    console.log('sendAnnouncementNotification called with', recipients.length, 'recipients');
+    
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     
-    // Get the current Supabase session for authentication
-    const { supabase } = await import('@/integrations/supabase/client');
-    const { data: sessionData } = await supabase.auth.getSession();
+    console.log('Supabase URL:', supabaseUrl);
     
-    if (!sessionData?.session?.access_token) {
-      throw new Error('No active session - please log in again');
-    }
+    console.log('Making request to edge function...');
     
     const response = await fetch(`${supabaseUrl}/functions/v1/send-announcement-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${sessionData.session.access_token}`,
         'apikey': supabaseAnonKey,
       },
       body: JSON.stringify({ recipients, announcement }),
     });
 
+    console.log('Edge function response status:', response.status);
+    
     if (!response.ok) {
-      const error = await response.json();
+      const errorText = await response.text();
+      console.error('Edge function error response:', errorText);
+      let error;
+      try {
+        error = JSON.parse(errorText);
+      } catch (e) {
+        error = { message: errorText };
+      }
       throw new Error(error.error || error.message || 'Failed to send emails');
     }
 
     const result = await response.json();
+    console.log('Edge function success response:', result);
+    
     return { 
       success: true, 
       message: `${result.successCount} email(s) sent successfully` 
