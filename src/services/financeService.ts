@@ -89,12 +89,25 @@ export const getRecordsByDateRange = async (
 export const addFinancialRecord = async (
   record: Omit<FinancialRecord, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-    ...record,
+  // Build the document data, excluding undefined values (Firestore doesn't accept undefined)
+  const docData: Record<string, unknown> = {
+    type: record.type,
+    description: record.description,
+    amount: record.amount,
+    category: record.category,
     transactionDate: Timestamp.fromDate(record.transactionDate),
+    recordedBy: record.recordedBy,
+    recordedByName: record.recordedByName,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
-  });
+  };
+  
+  // Only add referenceNumber if it has a value
+  if (record.referenceNumber) {
+    docData.referenceNumber = record.referenceNumber;
+  }
+  
+  const docRef = await addDoc(collection(db, COLLECTION_NAME), docData);
   return docRef.id;
 };
 
@@ -103,10 +116,23 @@ export const updateFinancialRecord = async (
   updates: Partial<Omit<FinancialRecord, 'id' | 'createdAt'>>
 ): Promise<void> => {
   const docRef = doc(db, COLLECTION_NAME, id);
+  
+  // Build update data, excluding undefined values
   const updateData: Record<string, unknown> = {
-    ...updates,
     updatedAt: Timestamp.now(),
   };
+  
+  if (updates.type !== undefined) updateData.type = updates.type;
+  if (updates.description !== undefined) updateData.description = updates.description;
+  if (updates.amount !== undefined) updateData.amount = updates.amount;
+  if (updates.category !== undefined) updateData.category = updates.category;
+  if (updates.recordedBy !== undefined) updateData.recordedBy = updates.recordedBy;
+  if (updates.recordedByName !== undefined) updateData.recordedByName = updates.recordedByName;
+  
+  // Handle referenceNumber - set to null if empty string, otherwise use the value
+  if (updates.referenceNumber !== undefined) {
+    updateData.referenceNumber = updates.referenceNumber || null;
+  }
   
   if (updates.transactionDate) {
     updateData.transactionDate = Timestamp.fromDate(updates.transactionDate);
