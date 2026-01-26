@@ -70,48 +70,6 @@ export type Database = {
           },
         ]
       }
-      financial_records: {
-        Row: {
-          amount: number
-          category: string | null
-          created_at: string
-          description: string
-          id: string
-          recorded_by: string
-          recorded_by_name: string
-          reference_number: string | null
-          transaction_date: string
-          type: string
-          updated_at: string
-        }
-        Insert: {
-          amount: number
-          category?: string | null
-          created_at?: string
-          description: string
-          id?: string
-          recorded_by: string
-          recorded_by_name: string
-          reference_number?: string | null
-          transaction_date?: string
-          type: string
-          updated_at?: string
-        }
-        Update: {
-          amount?: number
-          category?: string | null
-          created_at?: string
-          description?: string
-          id?: string
-          recorded_by?: string
-          recorded_by_name?: string
-          reference_number?: string | null
-          transaction_date?: string
-          type?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never

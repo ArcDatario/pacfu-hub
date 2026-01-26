@@ -15,7 +15,6 @@ import Elections from "./pages/Elections";
 import CreateElection from "./pages/CreateElection";
 import Faculty from "./pages/Faculty";
 import Messages from "./pages/Messages";
-import Finance from "./pages/Finance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,7 +38,6 @@ const App = () => (
               <Route path="/elections" element={<Elections />} />
               <Route path="/elections/create" element={<CreateElection />} />
               <Route path="/faculty" element={<Faculty />} />
-              <Route path="/finance" element={<Finance />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
