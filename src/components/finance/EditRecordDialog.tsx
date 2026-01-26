@@ -48,8 +48,9 @@ export function EditRecordDialog({ open, onOpenChange, record }: EditRecordDialo
 
   const categories = type === 'income' ? incomeCategories : expenseCategories;
 
+  // Initialize form when record changes or dialog opens
   useEffect(() => {
-    if (record) {
+    if (record && open) {
       setType(record.type);
       setDescription(record.description);
       setAmount(record.amount.toString());
@@ -57,7 +58,7 @@ export function EditRecordDialog({ open, onOpenChange, record }: EditRecordDialo
       setTransactionDate(record.transactionDate);
       setReferenceNumber(record.referenceNumber || '');
     }
-  }, [record]);
+  }, [record, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +114,9 @@ export function EditRecordDialog({ open, onOpenChange, record }: EditRecordDialo
             <Label>Transaction Type</Label>
             <Select value={type} onValueChange={(value: TransactionType) => {
               setType(value);
-              if (!categories.includes(category)) {
+              // Only clear category if it doesn't exist in the new type's categories
+              const newCategories = value === 'income' ? incomeCategories : expenseCategories;
+              if (!newCategories.includes(category)) {
                 setCategory('');
               }
             }}>

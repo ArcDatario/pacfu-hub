@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { getRecordsByDateRange, formatCurrency } from '@/services/financeService';
+import { getRecordsByDateRange } from '@/services/financeService';
 
 interface GenerateReportDialogProps {
   open: boolean;
@@ -32,6 +32,14 @@ export function GenerateReportDialog({ open, onOpenChange }: GenerateReportDialo
   const [loading, setLoading] = useState(false);
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+
+  // Custom function to format numbers with commas only
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Math.abs(amount));
+  };
 
   const generatePDF = async () => {
     if (!startDate || !endDate) {
@@ -117,73 +125,118 @@ export function GenerateReportDialog({ open, onOpenChange }: GenerateReportDialo
       const summaryY = 62;
       doc.setTextColor(34, 139, 34); // Green for income
       doc.text('Total Income:', 20, summaryY);
-      doc.text(formatCurrency(totalIncome), 20, summaryY + 8);
+      doc.text(formatAmount(totalIncome), 20, summaryY + 8);
 
       doc.setTextColor(220, 53, 69); // Red for expense
       doc.text('Total Expenses:', pageWidth / 2 - 20, summaryY);
-      doc.text(formatCurrency(totalExpense), pageWidth / 2 - 20, summaryY + 8);
+      doc.text(formatAmount(totalExpense), pageWidth / 2 - 20, summaryY + 8);
 
       doc.setTextColor(netBalance >= 0 ? 34 : 220, netBalance >= 0 ? 139 : 53, netBalance >= 0 ? 34 : 69);
       doc.text('Net Balance:', pageWidth - 60, summaryY);
-      doc.text(formatCurrency(netBalance), pageWidth - 60, summaryY + 8);
+      doc.text(formatAmount(netBalance), pageWidth - 60, summaryY + 8);
 
       doc.setTextColor(0, 0, 0);
 
       // Income Table
       const incomeRecords = records.filter((r) => r.type === 'income');
+      let currentY = 95;
+      
       if (incomeRecords.length > 0) {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('INCOME / FUNDS', 14, 95);
+        doc.text('INCOME / FUNDS', 14, currentY);
+        currentY += 10;
 
         autoTable(doc, {
-          startY: 100,
+          startY: currentY,
           head: [['Date', 'Description', 'Category', 'Reference', 'Amount']],
           body: incomeRecords.map((r) => [
             format(r.transactionDate, 'MM/dd/yyyy'),
             r.description,
             r.category,
             r.referenceNumber || '-',
-            formatCurrency(r.amount),
+            formatAmount(r.amount),
           ]),
-          foot: [['', '', '', 'Total:', formatCurrency(totalIncome)]],
-          headStyles: { fillColor: [34, 139, 34] },
-          footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
-          styles: { fontSize: 9 },
-          columnStyles: {
-            0: { cellWidth: 25 },
-            4: { halign: 'right' },
+          foot: [['', '', '', 'Total:', formatAmount(totalIncome)]],
+          headStyles: { 
+            fillColor: [34, 139, 34],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            halign: 'center'
           },
+          footStyles: { 
+            fillColor: [240, 240, 240], 
+            textColor: [0, 0, 0], 
+            fontStyle: 'bold',
+            halign: 'right'
+          },
+          styles: { 
+            fontSize: 9,
+            cellPadding: 3,
+            overflow: 'linebreak',
+            cellWidth: 'wrap'
+          },
+          columnStyles: {
+            0: { cellWidth: 25, halign: 'center' }, // Date
+            1: { cellWidth: 55, halign: 'left' },   // Description
+            2: { cellWidth: 30, halign: 'center' }, // Category
+            3: { cellWidth: 28, halign: 'center' }, // Reference
+            4: { cellWidth: 35, halign: 'right' },  // Amount
+          },
+          margin: { left: 14, right: 14 },
+          theme: 'grid',
         });
       }
 
       // Expense Table
       const expenseRecords = records.filter((r) => r.type === 'expense');
       if (expenseRecords.length > 0) {
-        const finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || 100;
+        const lastTable = (doc as any).lastAutoTable;
+        currentY = lastTable ? lastTable.finalY + 20 : currentY + 20;
         
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('EXPENSES', 14, finalY + 15);
+        doc.text('EXPENSES', 14, currentY);
+        currentY += 10;
 
         autoTable(doc, {
-          startY: finalY + 20,
+          startY: currentY,
           head: [['Date', 'Description', 'Category', 'Reference', 'Amount']],
           body: expenseRecords.map((r) => [
             format(r.transactionDate, 'MM/dd/yyyy'),
             r.description,
             r.category,
             r.referenceNumber || '-',
-            formatCurrency(r.amount),
+            formatAmount(r.amount),
           ]),
-          foot: [['', '', '', 'Total:', formatCurrency(totalExpense)]],
-          headStyles: { fillColor: [220, 53, 69] },
-          footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
-          styles: { fontSize: 9 },
-          columnStyles: {
-            0: { cellWidth: 25 },
-            4: { halign: 'right' },
+          foot: [['', '', '', 'Total:', formatAmount(totalExpense)]],
+          headStyles: { 
+            fillColor: [220, 53, 69],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            halign: 'center'
           },
+          footStyles: { 
+            fillColor: [240, 240, 240], 
+            textColor: [0, 0, 0], 
+            fontStyle: 'bold',
+            halign: 'right'
+          },
+          styles: { 
+            fontSize: 9,
+            cellPadding: 3,
+            overflow: 'linebreak',
+            cellWidth: 'wrap'
+          },
+          columnStyles: {
+            0: { cellWidth: 25, halign: 'center' }, // Date
+            1: { cellWidth: 55, halign: 'left' },   // Description
+            2: { cellWidth: 30, halign: 'center' }, // Category
+            3: { cellWidth: 28, halign: 'center' }, // Reference
+            4: { cellWidth: 35, halign: 'right' },  // Amount
+          },
+          margin: { left: 14, right: 14 },
+          theme: 'grid',
         });
       }
 
