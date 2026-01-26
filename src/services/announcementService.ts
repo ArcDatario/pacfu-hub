@@ -129,18 +129,29 @@ export const sendAnnouncementNotification = async (
 ): Promise<{ success: boolean; message: string }> => {
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    
+    // Get the current Supabase session for authentication
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data: sessionData } = await supabase.auth.getSession();
+    
+    if (!sessionData?.session?.access_token) {
+      throw new Error('No active session - please log in again');
+    }
     
     const response = await fetch(`${supabaseUrl}/functions/v1/send-announcement-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionData.session.access_token}`,
+        'apikey': supabaseAnonKey,
       },
       body: JSON.stringify({ recipients, announcement }),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to send emails');
+      throw new Error(error.error || error.message || 'Failed to send emails');
     }
 
     const result = await response.json();
