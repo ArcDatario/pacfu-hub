@@ -17,7 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Document, Breadcrumb } from '@/types/document';
 import { 
   subscribeToDocuments, 
-  getDownloadUrl,
+  getDocument, 
   toggleShareDocument 
 } from '@/services/documentService';
 import { DocumentCard } from '@/components/documents/DocumentCard';
@@ -68,10 +68,9 @@ export default function Documents() {
   };
 
   const handleDownload = (doc: Document) => {
-    if (doc.storagePath) {
-      const downloadUrl = getDownloadUrl(doc.storagePath);
+    if (doc.downloadUrl) {
       const link = document.createElement('a');
-      link.href = downloadUrl;
+      link.href = doc.downloadUrl;
       link.download = doc.name;
       link.target = '_blank';
       document.body.appendChild(link);

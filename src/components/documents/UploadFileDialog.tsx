@@ -9,11 +9,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Upload, File as FileIcon, X, AlertCircle } from 'lucide-react';
+import { Upload, File as FileIcon, X } from 'lucide-react';
 import { uploadFile } from '@/services/documentService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface UploadFileDialogProps {
   open: boolean;
@@ -21,63 +20,32 @@ interface UploadFileDialogProps {
   parentId: string | null;
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-
 export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDialogProps) {
   const { user } = useAuth();
+  // IMPORTANT: use the browser File type here. We also import a Lucide icon named `File`,
+  // so we alias it to `FileIcon` above to avoid breaking uploads.
   const [files, setFiles] = useState<globalThis.File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number[]>([]);
-  const [oversizedFiles, setOversizedFiles] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const validateAndAddFiles = (newFiles: globalThis.File[]) => {
-    const validFiles: globalThis.File[] = [];
-    const oversized: string[] = [];
-
-    newFiles.forEach((file) => {
-      if (file.size > MAX_FILE_SIZE) {
-        oversized.push(file.name);
-      } else {
-        validFiles.push(file);
-      }
-    });
-
-    if (oversized.length > 0) {
-      setOversizedFiles(oversized);
-      toast({
-        title: 'Files too large',
-        description: `${oversized.length} file(s) exceed the 5MB limit and were not added.`,
-        variant: 'destructive',
-      });
-    }
-
-    if (validFiles.length > 0) {
-      setFiles((prev) => [...prev, ...validFiles]);
-      setProgress((prev) => [...prev, ...validFiles.map(() => 0)]);
-    }
-  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      validateAndAddFiles(Array.from(e.target.files));
-    }
-    // Reset input so the same file can be selected again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      const newFiles = Array.from(e.target.files);
+      setFiles(prev => [...prev, ...newFiles]);
+      setProgress(prev => [...prev, ...newFiles.map(() => 0)]);
     }
   };
 
   const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-    setProgress((prev) => prev.filter((_, i) => i !== index));
+    setFiles(prev => prev.filter((_, i) => i !== index));
+    setProgress(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUpload = async () => {
     if (!user || files.length === 0) return;
 
     setUploading(true);
-    setOversizedFiles([]);
 
     try {
       for (let i = 0; i < files.length; i++) {
@@ -87,7 +55,7 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
           user.id,
           user.name,
           (fileProgress) => {
-            setProgress((prev) => {
+            setProgress(prev => {
               const newProgress = [...prev];
               newProgress[i] = fileProgress;
               return newProgress;
@@ -108,7 +76,7 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
       console.error('Upload error:', error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to upload files. Please try again.',
+        description: 'Failed to upload files. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -120,7 +88,6 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
     if (!uploading) {
       setFiles([]);
       setProgress([]);
-      setOversizedFiles([]);
       onOpenChange(false);
     }
   };
@@ -128,7 +95,9 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files) {
-      validateAndAddFiles(Array.from(e.dataTransfer.files));
+      const newFiles = Array.from(e.dataTransfer.files);
+      setFiles(prev => [...prev, ...newFiles]);
+      setProgress(prev => [...prev, ...newFiles.map(() => 0)]);
     }
   };
 
@@ -147,24 +116,6 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Size limit warning */}
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Maximum file size: 5MB per file
-            </AlertDescription>
-          </Alert>
-
-          {/* Oversized files warning */}
-          {oversizedFiles.length > 0 && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                These files exceeded the 5MB limit: {oversizedFiles.join(', ')}
-              </AlertDescription>
-            </Alert>
-          )}
-
           {/* Drop Zone */}
           <div
             className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
@@ -175,6 +126,9 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
             <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
             <p className="text-sm text-muted-foreground">
               Drag files here or click to browse
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Maximum file size: 50MB
             </p>
             <input
               ref={fileInputRef}
@@ -208,10 +162,7 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFile(index);
-                      }}
+                      onClick={() => removeFile(index)}
                     >
                       <X className="h-4 w-4" />
                     </Button>
