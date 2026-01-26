@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "resend";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -152,6 +153,38 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Verify authentication - require Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      console.error('Missing or invalid Authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Missing authentication' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Create Supabase client to verify the token
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Verify the JWT token and get claims
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token);
+
+    if (claimsError || !claimsData?.user) {
+      console.error('Invalid token:', claimsError?.message);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    console.log(`Authenticated user: ${claimsData.user.id}`);
+
     const { recipients, announcement }: AnnouncementEmailRequest = await req.json();
 
     // Validate required fields
@@ -163,16 +196,36 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Invalid announcement data");
     }
 
-    console.log(`Sending announcement email to ${recipients.length} recipients`);
+    // Input validation - sanitize announcement content
+    const sanitizedAnnouncement = {
+      title: announcement.title.substring(0, 200), // Limit title length
+      content: announcement.content.substring(0, 5000), // Limit content length
+      category: ['general', 'urgent', 'event', 'memo'].includes(announcement.category) 
+        ? announcement.category 
+        : 'general',
+      author: announcement.author.substring(0, 100), // Limit author length
+    };
+
+    // Limit number of recipients to prevent abuse
+    const limitedRecipients = recipients.slice(0, 100);
+
+    console.log(`Sending announcement email to ${limitedRecipients.length} recipients`);
 
     // Send emails to all recipients
-    const emailPromises = recipients.map(async (recipient) => {
+    const emailPromises = limitedRecipients.map(async (recipient) => {
       try {
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(recipient.email)) {
+          console.error(`Invalid email format: ${recipient.email}`);
+          return { email: recipient.email, success: false, error: 'Invalid email format' };
+        }
+
         const result = await resend.emails.send({
           from: "PACFU Portal <onboarding@resend.dev>",
           to: [recipient.email],
-          subject: `📢 ${announcement.category === 'urgent' ? '🚨 URGENT: ' : ''}${announcement.title}`,
-          html: generateEmailHtml(announcement, recipient.name || 'Faculty Member'),
+          subject: `📢 ${sanitizedAnnouncement.category === 'urgent' ? '🚨 URGENT: ' : ''}${sanitizedAnnouncement.title}`,
+          html: generateEmailHtml(sanitizedAnnouncement, recipient.name?.substring(0, 100) || 'Faculty Member'),
         });
         console.log(`Email sent to ${recipient.email}:`, result);
         return { email: recipient.email, success: true, result };
