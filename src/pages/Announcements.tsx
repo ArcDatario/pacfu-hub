@@ -1,59 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Search, Pin, Clock, User } from 'lucide-react';
+import { Plus, Search, Pin, Clock, User, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  author: string;
-  date: string;
-  isPinned: boolean;
-  category: 'general' | 'urgent' | 'event' | 'memo';
-}
-
-const announcements: Announcement[] = [
-  {
-    id: '1',
-    title: 'Faculty General Assembly - January 2026',
-    content: 'All PACFU members are required to attend the General Assembly on January 20, 2026 at 2:00 PM in the University Auditorium. Agenda includes election of new officers and budget approval.',
-    author: 'Dr. Maria Santos',
-    date: 'Jan 15, 2026',
-    isPinned: true,
-    category: 'urgent',
-  },
-  {
-    id: '2',
-    title: 'Research Grant Application Deadline Extended',
-    content: 'The deadline for submitting research grant applications has been extended to February 28, 2026. Please coordinate with the Research Office for requirements.',
-    author: 'Dr. Jose Garcia',
-    date: 'Jan 14, 2026',
-    isPinned: true,
-    category: 'general',
-  },
-  {
-    id: '3',
-    title: 'New Library Resources Available',
-    content: 'The University Library has acquired new academic journals and e-books. Access them through the online portal using your faculty credentials.',
-    author: 'Ms. Ana Reyes',
-    date: 'Jan 12, 2026',
-    isPinned: false,
-    category: 'general',
-  },
-  {
-    id: '4',
-    title: 'Faculty Development Workshop Series',
-    content: 'Register now for the upcoming Faculty Development Workshop Series starting February 2026. Topics include pedagogical innovations and research methodologies.',
-    author: 'Dr. Maria Santos',
-    date: 'Jan 10, 2026',
-    isPinned: false,
-    category: 'event',
-  },
-];
+import { Announcement } from '@/types/announcement';
+import { subscribeToAnnouncements, toggleAnnouncementPin } from '@/services/announcementService';
+import { CreateAnnouncementDialog } from '@/components/announcements/CreateAnnouncementDialog';
+import { EditAnnouncementDialog } from '@/components/announcements/EditAnnouncementDialog';
+import { DeleteAnnouncementDialog } from '@/components/announcements/DeleteAnnouncementDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { format } from 'date-fns';
 
 const categoryStyles = {
   general: 'bg-primary/10 text-primary',
@@ -66,6 +29,24 @@ export default function Announcements() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Dialog states
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+
+  // Subscribe to announcements
+  useEffect(() => {
+    const unsubscribe = subscribeToAnnouncements((data) => {
+      setAnnouncements(data);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const filteredAnnouncements = announcements.filter(a =>
     a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -74,6 +55,24 @@ export default function Announcements() {
 
   const pinnedAnnouncements = filteredAnnouncements.filter(a => a.isPinned);
   const regularAnnouncements = filteredAnnouncements.filter(a => !a.isPinned);
+
+  const handleEdit = (announcement: Announcement) => {
+    setSelectedAnnouncement(announcement);
+    setShowEditDialog(true);
+  };
+
+  const handleDelete = (announcement: Announcement) => {
+    setSelectedAnnouncement(announcement);
+    setShowDeleteDialog(true);
+  };
+
+  const handleTogglePin = async (announcement: Announcement) => {
+    try {
+      await toggleAnnouncementPin(announcement.id, announcement.isPinned);
+    } catch (error) {
+      console.error('Error toggling pin:', error);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -87,7 +86,7 @@ export default function Announcements() {
             </p>
           </div>
           {isAdmin && (
-            <Button variant="accent" className="gap-2">
+            <Button variant="default" className="gap-2" onClick={() => setShowCreateDialog(true)}>
               <Plus className="h-4 w-4" />
               New Announcement
             </Button>
@@ -105,44 +104,92 @@ export default function Announcements() {
           />
         </div>
 
-        {/* Pinned Announcements */}
-        {pinnedAnnouncements.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Pin className="h-4 w-4" />
-              Pinned
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              {pinnedAnnouncements.map((announcement) => (
-                <AnnouncementCard key={announcement.id} announcement={announcement} />
-              ))}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <>
+            {/* Pinned Announcements */}
+            {pinnedAnnouncements.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Pin className="h-4 w-4" />
+                  Pinned
+                </h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {pinnedAnnouncements.map((announcement) => (
+                    <AnnouncementCard 
+                      key={announcement.id} 
+                      announcement={announcement}
+                      isAdmin={isAdmin}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onTogglePin={handleTogglePin}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Regular Announcements */}
+            <div className="space-y-4">
+              {pinnedAnnouncements.length > 0 && (
+                <h2 className="text-sm font-medium text-muted-foreground">All Announcements</h2>
+              )}
+              <div className="space-y-4">
+                {regularAnnouncements.map((announcement) => (
+                  <AnnouncementCard 
+                    key={announcement.id} 
+                    announcement={announcement}
+                    isAdmin={isAdmin}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onTogglePin={handleTogglePin}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Regular Announcements */}
-        <div className="space-y-4">
-          {pinnedAnnouncements.length > 0 && (
-            <h2 className="text-sm font-medium text-muted-foreground">All Announcements</h2>
-          )}
-          <div className="space-y-4">
-            {regularAnnouncements.map((announcement) => (
-              <AnnouncementCard key={announcement.id} announcement={announcement} />
-            ))}
-          </div>
-        </div>
-
-        {filteredAnnouncements.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">No announcements found</p>
-          </div>
+            {filteredAnnouncements.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">No announcements found</p>
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Dialogs */}
+      <CreateAnnouncementDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
+      <EditAnnouncementDialog
+        announcement={selectedAnnouncement}
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+      />
+      <DeleteAnnouncementDialog
+        announcement={selectedAnnouncement}
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+      />
     </DashboardLayout>
   );
 }
 
-function AnnouncementCard({ announcement }: { announcement: Announcement }) {
+interface AnnouncementCardProps {
+  announcement: Announcement;
+  isAdmin: boolean;
+  onEdit: (announcement: Announcement) => void;
+  onDelete: (announcement: Announcement) => void;
+  onTogglePin: (announcement: Announcement) => void;
+}
+
+function AnnouncementCard({ announcement, isAdmin, onEdit, onDelete, onTogglePin }: AnnouncementCardProps) {
+  const formattedDate = format(announcement.createdAt, 'MMM d, yyyy');
+
   return (
     <div className="rounded-xl bg-card p-6 shadow-card transition-all hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-4">
@@ -163,7 +210,7 @@ function AnnouncementCard({ announcement }: { announcement: Announcement }) {
             {announcement.title}
           </h3>
           
-          <p className="text-sm text-muted-foreground line-clamp-2">
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
             {announcement.content}
           </p>
           
@@ -174,10 +221,37 @@ function AnnouncementCard({ announcement }: { announcement: Announcement }) {
             </span>
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {announcement.date}
+              {formattedDate}
             </span>
           </div>
         </div>
+
+        {isAdmin && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onTogglePin(announcement)}>
+                <Pin className="mr-2 h-4 w-4" />
+                {announcement.isPinned ? 'Unpin' : 'Pin'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(announcement)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => onDelete(announcement)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );

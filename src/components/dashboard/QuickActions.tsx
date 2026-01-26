@@ -21,7 +21,7 @@ interface QuickAction {
 const quickActions: QuickAction[] = [
   {
     label: 'New Announcement',
-    href: '/announcements/new',
+    href: '/announcements',
     icon: Megaphone,
     description: 'Post an announcement',
     adminOnly: true,
