@@ -28,7 +28,7 @@ const quickActions: QuickAction[] = [
   },
   {
     label: 'Create Poll',
-    href: '/polls/new',
+    href: '/polls',
     icon: BarChart3,
     description: 'Start a new poll',
     adminOnly: true,
@@ -40,8 +40,8 @@ const quickActions: QuickAction[] = [
     description: 'Submit files',
   },
   {
-    label: 'Group Chats',
-    href: '/chats',
+    label: 'Chats',
+    href: '/messages',
     icon: MessageSquare,
     description: 'View messages',
   },
