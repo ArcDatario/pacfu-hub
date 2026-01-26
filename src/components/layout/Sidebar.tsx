@@ -52,8 +52,12 @@ export function Sidebar() {
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
-              <span className="font-display text-lg font-bold text-accent-foreground">P</span>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white p-1">
+              <img 
+                src="/psau-logo.png" 
+                alt="PSAU Logo" 
+                className="h-full w-full object-contain"
+              />
             </div>
             <div>
               <h1 className="font-display text-lg font-semibold text-sidebar-foreground">PACFU</h1>
