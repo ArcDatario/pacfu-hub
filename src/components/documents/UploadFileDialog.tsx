@@ -9,11 +9,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Upload, File as FileIcon, X, AlertCircle } from 'lucide-react';
-import { uploadFile, validateFileSize, getMaxFileSizeMB } from '@/services/documentService';
+import { Upload, File, X } from 'lucide-react';
+import { uploadFile } from '@/services/documentService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface UploadFileDialogProps {
   open: boolean;
@@ -23,9 +22,7 @@ interface UploadFileDialogProps {
 
 export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDialogProps) {
   const { user } = useAuth();
-  // IMPORTANT: use the browser File type here. We also import a Lucide icon named `File`,
-  // so we alias it to `FileIcon` above to avoid breaking uploads.
-  const [files, setFiles] = useState<globalThis.File[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,29 +30,8 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      const validFiles: globalThis.File[] = [];
-      const invalidFiles: string[] = [];
-      
-      newFiles.forEach(file => {
-        if (validateFileSize(file)) {
-          validFiles.push(file);
-        } else {
-          invalidFiles.push(file.name);
-        }
-      });
-      
-      if (invalidFiles.length > 0) {
-        toast({
-          title: 'Files too large',
-          description: `${invalidFiles.join(', ')} exceed the ${getMaxFileSizeMB()}MB limit`,
-          variant: 'destructive',
-        });
-      }
-      
-      if (validFiles.length > 0) {
-        setFiles(prev => [...prev, ...validFiles]);
-        setProgress(prev => [...prev, ...validFiles.map(() => 0)]);
-      }
+      setFiles(prev => [...prev, ...newFiles]);
+      setProgress(prev => [...prev, ...newFiles.map(() => 0)]);
     }
   };
 
@@ -118,29 +94,8 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
     e.preventDefault();
     if (e.dataTransfer.files) {
       const newFiles = Array.from(e.dataTransfer.files);
-      const validFiles: globalThis.File[] = [];
-      const invalidFiles: string[] = [];
-      
-      newFiles.forEach(file => {
-        if (validateFileSize(file)) {
-          validFiles.push(file);
-        } else {
-          invalidFiles.push(file.name);
-        }
-      });
-      
-      if (invalidFiles.length > 0) {
-        toast({
-          title: 'Files too large',
-          description: `${invalidFiles.join(', ')} exceed the ${getMaxFileSizeMB()}MB limit`,
-          variant: 'destructive',
-        });
-      }
-      
-      if (validFiles.length > 0) {
-        setFiles(prev => [...prev, ...validFiles]);
-        setProgress(prev => [...prev, ...validFiles.map(() => 0)]);
-      }
+      setFiles(prev => [...prev, ...newFiles]);
+      setProgress(prev => [...prev, ...newFiles.map(() => 0)]);
     }
   };
 
@@ -171,7 +126,7 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
               Drag files here or click to browse
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Maximum file size: {getMaxFileSizeMB()}MB
+              Maximum file size: 50MB
             </p>
             <input
               ref={fileInputRef}
@@ -190,7 +145,7 @@ export function UploadFileDialog({ open, onOpenChange, parentId }: UploadFileDia
                   key={index}
                   className="flex items-center gap-3 p-3 bg-muted rounded-lg"
                 >
-                  <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <File className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{file.name}</p>
                     <p className="text-xs text-muted-foreground">
