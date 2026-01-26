@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
+import { logFacultyAction } from '@/services/logService';
 import { toast } from 'sonner';
 import { Group, subscribeToGroups } from '@/services/groupService';
 
@@ -55,7 +56,7 @@ const positions = [
 
 
 export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogProps) {
-  const { createFaculty } = useAuth();
+  const { user, createFaculty } = useAuth();
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -107,6 +108,15 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
       );
 
       if (result.success) {
+        // Log the action
+        if (user) {
+          await logFacultyAction('created', formData.name, user.id, user.name, {
+            email: formData.email,
+            department: formData.department,
+            position: formData.position,
+          });
+        }
+        
         toast.success(`Faculty account created for ${formData.name}`, {
           description: 'Note: You may need to log in again as the admin.'
         });

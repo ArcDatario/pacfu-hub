@@ -22,7 +22,9 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { updateAnnouncement } from '@/services/announcementService';
+import { logAnnouncementAction } from '@/services/logService';
 import { Announcement, AnnouncementCategory } from '@/types/announcement';
 import { Loader2 } from 'lucide-react';
 
@@ -42,6 +44,7 @@ interface EditAnnouncementDialogProps {
 }
 
 export function EditAnnouncementDialog({ announcement, open, onOpenChange }: EditAnnouncementDialogProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -87,6 +90,11 @@ export function EditAnnouncementDialog({ announcement, open, onOpenChange }: Edi
         category: data.category as AnnouncementCategory,
         isPinned: data.isPinned,
       });
+
+      // Log the action
+      if (user) {
+        await logAnnouncementAction('updated', data.title, user.id, user.name);
+      }
 
       toast({
         title: 'Announcement updated',

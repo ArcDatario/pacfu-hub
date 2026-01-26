@@ -16,6 +16,7 @@ import CreateElection from "./pages/CreateElection";
 import Faculty from "./pages/Faculty";
 import Messages from "./pages/Messages";
 import Finance from "./pages/Finance";
+import Logs from "./pages/Logs";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/elections/create" element={<CreateElection />} />
               <Route path="/faculty" element={<Faculty />} />
               <Route path="/finance" element={<Finance />} />
+              <Route path="/logs" element={<Logs />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

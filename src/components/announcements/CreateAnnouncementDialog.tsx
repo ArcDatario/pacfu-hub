@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { createAnnouncement, getFacultyEmails, sendAnnouncementNotification } from '@/services/announcementService';
+import { logAnnouncementAction } from '@/services/logService';
 import { AnnouncementCategory } from '@/types/announcement';
 import { Loader2 } from 'lucide-react';
 
@@ -134,6 +135,12 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
           });
         }
       }
+
+      // Log the action
+      await logAnnouncementAction('created', data.title, user.id, user.name, {
+        category: data.category,
+        isPinned: data.isPinned,
+      });
 
       toast({
         title: 'Announcement created',

@@ -21,6 +21,7 @@ import {
 import { Users, Clock, CheckCircle, MoreVertical, Vote, StopCircle, Play, Trash2 } from 'lucide-react';
 import { Poll, PollResponse } from '@/types/poll';
 import { subscribePollResponses, endPoll, deletePoll, reactivatePoll, calculateVoteCounts, getUserResponse } from '@/services/pollService';
+import { logPollAction } from '@/services/logService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -72,6 +73,12 @@ export function PollCard({ poll, onVote }: PollCardProps) {
     setIsProcessing(true);
     try {
       await endPoll(poll.id);
+      
+      // Log the action
+      if (user) {
+        await logPollAction('ended', poll.title, user.id, user.name);
+      }
+      
       toast({ title: 'Poll ended successfully' });
     } catch (error) {
       toast({ title: 'Failed to end poll', variant: 'destructive' });
@@ -85,6 +92,12 @@ export function PollCard({ poll, onVote }: PollCardProps) {
     setIsProcessing(true);
     try {
       await reactivatePoll(poll.id);
+      
+      // Log the action
+      if (user) {
+        await logPollAction('reactivated', poll.title, user.id, user.name);
+      }
+      
       toast({ title: 'Poll reactivated successfully' });
     } catch (error) {
       toast({ title: 'Failed to reactivate poll', variant: 'destructive' });
@@ -97,6 +110,12 @@ export function PollCard({ poll, onVote }: PollCardProps) {
     setIsProcessing(true);
     try {
       await deletePoll(poll.id);
+      
+      // Log the action
+      if (user) {
+        await logPollAction('deleted', poll.title, user.id, user.name);
+      }
+      
       toast({ title: 'Poll deleted successfully' });
     } catch (error) {
       toast({ title: 'Failed to delete poll', variant: 'destructive' });

@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { addFinancialRecord } from '@/services/financeService';
+import { logFinanceAction } from '@/services/logService';
 import { TransactionType, incomeCategories, expenseCategories } from '@/types/finance';
 
 interface AddRecordDialogProps {
@@ -81,16 +82,27 @@ export function AddRecordDialog({ open, onOpenChange }: AddRecordDialogProps) {
 
     setLoading(true);
     try {
+      const parsedAmount = parseFloat(amount);
       await addFinancialRecord({
         type,
         description: description.trim(),
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category,
         transactionDate,
         referenceNumber: referenceNumber.trim() || undefined,
         recordedBy: user.id,
         recordedByName: user.name,
       });
+
+      // Log the action
+      await logFinanceAction(
+        type === 'income' ? 'income_added' : 'expense_added',
+        description.trim(),
+        parsedAmount,
+        user.id,
+        user.name,
+        { category, referenceNumber: referenceNumber.trim() || undefined }
+      );
 
       toast({
         title: 'Success',

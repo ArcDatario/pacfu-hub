@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { createPoll } from '@/services/pollService';
+import { logPollAction } from '@/services/logService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 
@@ -113,6 +114,15 @@ export function CreatePollDialog({ open, onOpenChange }: CreatePollDialogProps) 
       );
 
       if (pollId) {
+        // Log the action
+        await logPollAction(
+          'created',
+          data.title,
+          user.id,
+          user.name,
+          { optionCount: validOptions.length, allowMultiple: data.allowMultiple }
+        );
+
         toast({
           title: 'Success',
           description: 'Poll created successfully',

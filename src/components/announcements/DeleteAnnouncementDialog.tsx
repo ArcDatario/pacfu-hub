@@ -10,7 +10,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { deleteAnnouncement } from '@/services/announcementService';
+import { logAnnouncementAction } from '@/services/logService';
 import { Announcement } from '@/types/announcement';
 import { Loader2 } from 'lucide-react';
 
@@ -25,6 +27,7 @@ export function DeleteAnnouncementDialog({
   open, 
   onOpenChange 
 }: DeleteAnnouncementDialogProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -34,6 +37,11 @@ export function DeleteAnnouncementDialog({
     setIsLoading(true);
     try {
       await deleteAnnouncement(announcement.id);
+      
+      // Log the action
+      if (user) {
+        await logAnnouncementAction('deleted', announcement.title, user.id, user.name);
+      }
       
       toast({
         title: 'Announcement deleted',

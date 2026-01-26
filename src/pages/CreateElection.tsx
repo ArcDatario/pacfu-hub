@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFaculty } from '@/contexts/FacultyContext';
 import { createElection } from '@/services/electionService';
+import { logElectionAction } from '@/services/logService';
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -208,6 +209,11 @@ export default function CreateElection() {
       const electionId = await createElection(electionData, user.id);
 
       if (electionId) {
+        // Log the action
+        await logElectionAction('created', formData.title, user.id, user.name, {
+          positionCount: positions.length,
+        });
+        
         toast.success('Election created successfully');
         navigate('/elections');
       } else {

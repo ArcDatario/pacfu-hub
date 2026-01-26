@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,9 +10,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { deleteFinancialRecord, formatCurrency } from '@/services/financeService';
+import { logFinanceAction } from '@/services/logService';
 import { FinancialRecord } from '@/types/finance';
-import { useState } from 'react';
 
 interface DeleteRecordDialogProps {
   open: boolean;
@@ -20,6 +22,7 @@ interface DeleteRecordDialogProps {
 }
 
 export function DeleteRecordDialog({ open, onOpenChange, record }: DeleteRecordDialogProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -29,6 +32,19 @@ export function DeleteRecordDialog({ open, onOpenChange, record }: DeleteRecordD
     setLoading(true);
     try {
       await deleteFinancialRecord(record.id);
+      
+      // Log the action
+      if (user) {
+        await logFinanceAction(
+          'record_deleted',
+          record.description,
+          record.amount,
+          user.id,
+          user.name,
+          { category: record.category }
+        );
+      }
+
       toast({
         title: 'Success',
         description: 'Record deleted successfully.',
