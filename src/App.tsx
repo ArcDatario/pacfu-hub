@@ -25,22 +25,21 @@ const App = () => (
     <AuthProvider>
       <FacultyProvider>
         <TooltipProvider>
-          <Toaster />
-          <Sonner />
           <BrowserRouter>
+            <Toaster />
+            <Sonner />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/announcements" element={<Announcements />} />
-                            <Route path="/messages" element={<Messages />} />
+              <Route path="/messages" element={<Messages />} />
               <Route path="/documents" element={<Documents />} />
               <Route path="/polls" element={<Polls />} />
               <Route path="/elections" element={<Elections />} />
               <Route path="/elections/create" element={<CreateElection />} />
               <Route path="/faculty" element={<Faculty />} />
               <Route path="/finance" element={<Finance />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
