@@ -22,10 +22,21 @@ import { auth, db, firebaseConfig } from '@/lib/firebase';
 import { User, UserRole } from '@/types/auth';
 
 // Default admin account - will be created on first app load
+// SECURITY: Password should be changed immediately after first login
+// The random password ensures the account isn't accessible with default credentials
+const generateSecurePassword = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < 24; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
 export const DEFAULT_ADMIN = {
-  email: 'admin@pacfu.psau.edu',
-  password: 'admin123',
-  name: 'Dr. Maria Santos',
+  email: import.meta.env.VITE_ADMIN_EMAIL || 'admin@pacfu.psau.edu',
+  password: import.meta.env.VITE_ADMIN_PASSWORD || generateSecurePassword(),
+  name: import.meta.env.VITE_ADMIN_NAME || 'System Administrator',
   role: 'admin' as UserRole,
 };
 
