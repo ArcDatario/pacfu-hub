@@ -126,8 +126,7 @@ export const uploadFile = async (
   try {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('userId', userId);
-
+    formData.append('userId', 'default'); // Always use 'default' for consistent file paths
     onProgress?.(10);
 
     // CHANGE THIS LINE - use full URL
