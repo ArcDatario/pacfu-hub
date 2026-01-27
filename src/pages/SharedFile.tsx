@@ -83,14 +83,18 @@ export default function SharedFile() {
         window.document.body.removeChild(link);
         URL.revokeObjectURL(url);
       } else if (document.downloadUrl) {
-        // Download single file
+        // Force download single file using fetch + blob
+        const response = await fetch(document.downloadUrl);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
         const link = window.document.createElement('a');
-        link.href = document.downloadUrl;
+        link.href = url;
         link.download = document.name;
-        link.target = '_blank';
+        link.style.display = 'none';
         window.document.body.appendChild(link);
         link.click();
         window.document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       }
     } catch (error) {
       console.error('Download error:', error);

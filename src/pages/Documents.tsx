@@ -20,7 +20,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Document, Breadcrumb } from '@/types/document';
 import { 
   subscribeToDocuments, 
-  getAllFilesInFolder
+  getAllFilesInFolder,
+  downloadFile
 } from '@/services/documentService';
 import { DocumentCard } from '@/components/documents/DocumentCard';
 import { UploadFileDialog } from '@/components/documents/UploadFileDialog';
@@ -90,15 +91,21 @@ export default function Documents() {
     setBreadcrumbs(prev => prev.slice(0, index + 1));
   };
 
-  const handleDownload = (doc: Document) => {
+  const handleDownload = async (doc: Document) => {
     if (doc.downloadUrl) {
-      const link = document.createElement('a');
-      link.href = doc.downloadUrl;
-      link.download = doc.name;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      try {
+        await downloadFile(doc.downloadUrl, doc.name);
+        toast({
+          title: 'Download started',
+          description: `Downloading ${doc.name}`,
+        });
+      } catch (error) {
+        toast({
+          title: 'Download failed',
+          description: 'Could not download the file',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
