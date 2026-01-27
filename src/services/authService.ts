@@ -99,6 +99,7 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
       role: userData.role,
       avatar: userData.avatar || undefined,
       isActive: userData.isActive,
+      department: userData.department || undefined,
       createdAt: userData.createdAt?.toDate() || new Date(),
     };
     
@@ -155,6 +156,7 @@ export const getUserData = async (uid: string): Promise<User | null> => {
       role: data.role,
       avatar: data.avatar || undefined,
       isActive: data.isActive,
+      department: data.department || undefined,
       createdAt: data.createdAt?.toDate() || new Date(),
     };
     

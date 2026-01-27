@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role: userData.role,
             avatar: userData.avatar, // This is the key field
             isActive: userData.isActive,
+            department: userData.department,
             createdAt: userData.createdAt,
           },
         }));
