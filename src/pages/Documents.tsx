@@ -47,14 +47,16 @@ export default function Documents() {
 
   // Subscribe to documents
   useEffect(() => {
+    if (!user?.id) return;
+    
     setLoading(true);
-    const unsubscribe = subscribeToDocuments(currentFolderId, (docs) => {
+    const unsubscribe = subscribeToDocuments(currentFolderId, user.id, (docs) => {
       setDocuments(docs);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [currentFolderId]);
+  }, [currentFolderId, user?.id]);
 
   // Update breadcrumbs when navigating
   const navigateToFolder = async (doc: Document) => {

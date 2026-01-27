@@ -11,10 +11,10 @@ export default function Dashboard() {
   const isAdmin = user?.role === 'admin';
 
   const adminStats = [
-    { title: 'Total Faculty', value: 124, icon: Users, trend: { value: 8, isPositive: true } },
+    { title: 'Total Faculty', value: 124, icon: Users},
     { title: 'Active Chats', value: 18, icon: MessageSquare },
-    { title: 'Announcements', value: 45, icon: Megaphone, description: 'This semester' },
-    { title: 'Documents', value: 892, icon: FileText, trend: { value: 12, isPositive: true } },
+    { title: 'Announcements', value: 45, icon: Megaphone},
+    { title: 'Documents', value: 892, icon: FileText },
     { title: 'Active Polls', value: 3, icon: Vote },
     { title: 'Total Funds', value: '₱245,000', icon: DollarSign },
   ];

@@ -20,7 +20,7 @@ interface QuickAction {
 
 const quickActions: QuickAction[] = [
   {
-    label: 'New Announcement',
+    label: 'Announcement',
     href: '/announcements',
     icon: Megaphone,
     description: 'Post an announcement',
@@ -34,7 +34,7 @@ const quickActions: QuickAction[] = [
     adminOnly: true,
   },
   {
-    label: 'Upload Document',
+    label: 'Document',
     href: '/documents',
     icon: FileUp,
     description: 'Submit files',
@@ -43,19 +43,19 @@ const quickActions: QuickAction[] = [
     label: 'Chats',
     href: '/messages',
     icon: MessageSquare,
-    description: 'View messages',
+    description: 'Messages',
   },
   {
     label: 'Elections',
     href: '/elections',
     icon: Vote,
-    description: 'Participate in voting',
+    description: 'Create Eelection',
   },
   {
     label: 'Manage Faculty',
     href: '/faculty',
     icon: Users,
-    description: 'View & manage members',
+    description: 'View members',
     adminOnly: true,
   },
 ];

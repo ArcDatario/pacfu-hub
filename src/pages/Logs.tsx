@@ -27,7 +27,7 @@ const categoryConfig: Record<LogCategory, { label: string; icon: React.ElementTy
   election: { label: 'Election', icon: Vote, color: 'bg-purple-500' },
   poll: { label: 'Poll', icon: BarChart3, color: 'bg-green-500' },
   finance: { label: 'Finance', icon: DollarSign, color: 'bg-yellow-500' },
-  announcement: { label: 'Announcement', icon: Megaphone, color: 'bg-red-500' },
+  announcement: { label: 'Notice', icon: Megaphone, color: 'bg-red-500' },
   document: { label: 'Document', icon: FolderOpen, color: 'bg-cyan-500' },
 };
 

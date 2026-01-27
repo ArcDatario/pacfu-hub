@@ -1,4 +1,4 @@
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { 
   collection, 
   addDoc, 
@@ -12,25 +12,21 @@ import {
   Timestamp,
   getDocs
 } from 'firebase/firestore';
-import { 
-  ref, 
-  uploadBytesResumable, 
-  getDownloadURL, 
-  deleteObject 
-} from 'firebase/storage';
 import { Document, getFileType, formatFileSize } from '@/types/document';
 
 const COLLECTION_NAME = 'documents';
 
-// Subscribe to documents in a folder
+// Subscribe to documents in a folder for a specific user
 export const subscribeToDocuments = (
   parentId: string | null,
+  userId: string,
   callback: (docs: Document[]) => void
 ) => {
-  // Simple query without multiple orderBy to avoid needing composite index
+  // Query documents that belong to the current user
   const q = query(
     collection(db, COLLECTION_NAME),
-    where('parentId', '==', parentId)
+    where('parentId', '==', parentId),
+    where('createdBy', '==', userId) // Filter by user ID
   );
 
   return onSnapshot(q, (snapshot) => {
@@ -68,6 +64,7 @@ export const subscribeToDocuments = (
     callback([]);
   });
 };
+
 export const getDocument = async (docId: string): Promise<Document | null> => {
   const docRef = doc(db, COLLECTION_NAME, docId);
   const docSnap = await getDoc(docRef);
@@ -118,7 +115,7 @@ export const createFolder = async (
   return docRef.id;
 };
 
-// Upload a file
+// Upload a file to public folder
 export const uploadFile = async (
   file: File,
   parentId: string | null,
@@ -126,56 +123,54 @@ export const uploadFile = async (
   userName: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
-  // Create storage path
-  const timestamp = Date.now();
-  const storagePath = `documents/${userId}/${timestamp}_${file.name}`;
-  const storageRef = ref(storage, storagePath);
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('userId', userId);
 
-  // Upload file with progress
-  return new Promise((resolve, reject) => {
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    onProgress?.(10);
 
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        onProgress?.(progress);
-      },
-      (error) => {
-        console.error('Upload error:', error);
-        reject(error);
-      },
-      async () => {
-        try {
-          // Get download URL
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          
-          // Create document record in Firestore
-          const now = Timestamp.now();
-          const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-            name: file.name,
-            type: getFileType(file.type),
-            size: file.size,
-            sizeFormatted: formatFileSize(file.size),
-            mimeType: file.type,
-            downloadUrl,
-            storagePath,
-            parentId,
-            createdBy: userId,
-            createdByName: userName,
-            createdAt: now,
-            updatedAt: now,
-            shared: false,
-            sharedWith: [],
-          });
+    // CHANGE THIS LINE - use full URL
+    const response = await fetch('http://localhost:3001/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
 
-          resolve(docRef.id);
-        } catch (error) {
-          reject(error);
-        }
-      }
-    );
-  });
+    onProgress?.(50);
+
+    if (!response.ok) {
+      throw new Error('Upload failed');
+    }
+
+    const { filePath, downloadUrl } = await response.json();
+
+    onProgress?.(80);
+
+    const now = Timestamp.now();
+    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+      name: file.name,
+      type: getFileType(file.type),
+      size: file.size,
+      sizeFormatted: formatFileSize(file.size),
+      mimeType: file.type,
+      downloadUrl,
+      storagePath: filePath,
+      parentId,
+      createdBy: userId,
+      createdByName: userName,
+      createdAt: now,
+      updatedAt: now,
+      shared: false,
+      sharedWith: [],
+    });
+
+    onProgress?.(100);
+
+    return docRef.id;
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw error;
+  }
 };
 
 // Rename a document/folder
@@ -189,7 +184,6 @@ export const renameDocument = async (docId: string, newName: string): Promise<vo
 
 // Delete a document/folder
 export const deleteDocument = async (document: Document): Promise<void> => {
-  // If it's a folder, delete all children first
   if (document.type === 'folder') {
     const childrenQuery = query(
       collection(db, COLLECTION_NAME),
@@ -208,17 +202,21 @@ export const deleteDocument = async (document: Document): Promise<void> => {
     }
   }
 
-  // Delete file from storage if it exists
   if (document.storagePath) {
     try {
-      const storageRef = ref(storage, document.storagePath);
-      await deleteObject(storageRef);
+      // CHANGE THIS LINE - use full URL
+      await fetch('http://localhost:3001/api/delete-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filePath: document.storagePath }),
+      });
     } catch (error) {
       console.error('Error deleting file from storage:', error);
     }
   }
 
-  // Delete document from Firestore
   await deleteDoc(doc(db, COLLECTION_NAME, document.id));
 };
 
