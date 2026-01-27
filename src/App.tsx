@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FacultyProvider } from "@/contexts/FacultyContext";
+import { MobileProvider } from "@/contexts/MobileContext"; // Add this import
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -26,28 +27,30 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <FacultyProvider>
-        <TooltipProvider>
-          <BrowserRouter>
-            <Toaster />
-            <Sonner />
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/announcements" element={<Announcements />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/documents" element={<Documents />} />
-              <Route path="/polls" element={<Polls />} />
-              <Route path="/elections" element={<Elections />} />
-              <Route path="/elections/create" element={<CreateElection />} />
-              <Route path="/faculty" element={<Faculty />} />
-              <Route path="/finance" element={<Finance />} />
-              <Route path="/logs" element={<Logs />} />
-              <Route path="/share/:token" element={<SharedFile />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+        <MobileProvider> {/* Add this provider */}
+          <TooltipProvider>
+            <BrowserRouter>
+              <Toaster />
+              <Sonner />
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/announcements" element={<Announcements />} />
+                <Route path="/messages" element={<Messages />} />
+                <Route path="/documents" element={<Documents />} />
+                <Route path="/polls" element={<Polls />} />
+                <Route path="/elections" element={<Elections />} />
+                <Route path="/elections/create" element={<CreateElection />} />
+                <Route path="/faculty" element={<Faculty />} />
+                <Route path="/finance" element={<Finance />} />
+                <Route path="/logs" element={<Logs />} />
+                <Route path="/share/:token" element={<SharedFile />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </MobileProvider>
       </FacultyProvider>
     </AuthProvider>
   </QueryClientProvider>
