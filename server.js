@@ -54,7 +54,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     res.json({
       success: true,
       filePath: publicPath,
-      downloadUrl: `http://localhost:${PORT}${publicPath}`,
+      downloadUrl: publicPath, // Use relative path - works on any domain
       fileName: req.file.originalname
     });
   } catch (error) {
