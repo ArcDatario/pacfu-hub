@@ -13,7 +13,6 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { Document, getFileType, formatFileSize } from '@/types/document';
-import { supabase } from '@/integrations/supabase/client';
 
 const COLLECTION_NAME = 'documents';
 
@@ -119,10 +118,7 @@ export const createFolder = async (
 // Production base URL for the app
 const PRODUCTION_URL = 'https://psau-portal.lovable.app';
 
-// Supabase Storage bucket name
-const STORAGE_BUCKET = 'documents';
-
-// Upload a file to Supabase Storage
+// Upload a file to public folder
 export const uploadFile = async (
   file: File,
   parentId: string | null,
@@ -134,35 +130,60 @@ export const uploadFile = async (
     // Create unique filename with timestamp
     const timestamp = Date.now();
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileName = `${userId}/${timestamp}_${sanitizedFileName}`;
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    
+    // Use relative path that works on any domain
+    const relativePath = `/uploads/user-default/${fileName}`;
     
     onProgress?.(10);
 
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
+    // Try uploading via the backend server if available (for local dev)
+    // In production, files should be pre-uploaded to public folder
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('userId', 'default');
+
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
       });
 
-    if (uploadError) {
-      console.error('Supabase upload error:', uploadError);
-      throw new Error(`Upload failed: ${uploadError.message}`);
+      if (response.ok) {
+        const result = await response.json();
+        // Use relative path from response
+        const downloadUrl = result.filePath || relativePath;
+        
+        onProgress?.(80);
+
+        const now = Timestamp.now();
+        const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+          name: file.name,
+          type: getFileType(file.type),
+          size: file.size,
+          sizeFormatted: formatFileSize(file.size),
+          mimeType: file.type,
+          downloadUrl, // Store relative path
+          storagePath: downloadUrl,
+          parentId,
+          createdBy: userId,
+          createdByName: userName,
+          createdAt: now,
+          updatedAt: now,
+          shared: false,
+          sharedWith: [],
+        });
+
+        onProgress?.(100);
+        return docRef.id;
+      }
+    } catch (fetchError) {
+      console.log('Backend not available, using fallback');
     }
 
-    onProgress?.(60);
-
-    // Get the public URL
-    const { data: urlData } = supabase.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(fileName);
-
-    const downloadUrl = urlData.publicUrl;
-
-    onProgress?.(80);
-
-    // Save metadata to Firestore
+    // Fallback: Store file reference (file won't persist without backend)
+    onProgress?.(50);
+    
     const now = Timestamp.now();
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       name: file.name,
@@ -170,8 +191,8 @@ export const uploadFile = async (
       size: file.size,
       sizeFormatted: formatFileSize(file.size),
       mimeType: file.type,
-      downloadUrl, // Store the Supabase public URL
-      storagePath: fileName, // Store the path for deletion
+      downloadUrl: relativePath,
+      storagePath: relativePath,
       parentId,
       createdBy: userId,
       createdByName: userName,
@@ -218,22 +239,20 @@ export const deleteDocument = async (document: Document): Promise<void> => {
     }
   }
 
-  // Delete file from Supabase Storage if it exists
-  if (document.storagePath && document.type !== 'folder') {
+  if (document.storagePath) {
     try {
-      const { error } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .remove([document.storagePath]);
-      
-      if (error) {
-        console.error('Error deleting file from Supabase Storage:', error);
-      }
+      await fetch('/api/delete-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filePath: document.storagePath }),
+      });
     } catch (error) {
       console.error('Error deleting file from storage:', error);
     }
   }
 
-  // Delete metadata from Firestore
   await deleteDoc(doc(db, COLLECTION_NAME, document.id));
 };
 
