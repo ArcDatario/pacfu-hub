@@ -139,10 +139,9 @@ export const sendAnnouncementNotification = async (
   try {
     console.log('sendAnnouncementNotification called with', recipients.length, 'recipients');
     
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    
-    console.log('Supabase URL:', supabaseUrl);
+    // Use hardcoded URL since env variable may not load properly
+    const supabaseUrl = 'https://pdyywievbtdhtxylylln.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkeXl3aWV2YnRkaHR4eWx5bGxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyOTgzMDQsImV4cCI6MjA4NDg3NDMwNH0.cfxky3c4CCd0NqLKdSBVaK5JdVJRZbUjl2pvntsncTA';
     
     console.log('Making request to edge function...');
     
