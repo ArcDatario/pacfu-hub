@@ -129,7 +129,7 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest["announcement"
           <!-- Announcement Content Card -->
           <tr>
             <td style="padding: 24px 40px;">
-              <div style="background: transparent; border: 1px solid #a7f3d0; border-left: 5px solid #10b981; border-radius: 0 16px 16px 0; padding: 28px; position: relative;">
+              <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0; border-left: 5px solid #10b981; border-radius: 0 16px 16px 0; padding: 28px; position: relative;">
                 <h2 style="margin: 0 0 16px 0; color: #065f46; font-size: 22px; font-weight: 700; line-height: 1.4;">
                   ${safeTitle}
                 </h2>
