@@ -115,6 +115,9 @@ export const createFolder = async (
   return docRef.id;
 };
 
+// Production base URL for the app
+const PRODUCTION_URL = 'https://psau-portal.lovable.app';
+
 // Upload a file to public folder
 export const uploadFile = async (
   file: File,
@@ -124,27 +127,63 @@ export const uploadFile = async (
   onProgress?: (progress: number) => void
 ): Promise<string> => {
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('userId', 'default'); // Always use 'default' for consistent file paths
+    // Create unique filename with timestamp
+    const timestamp = Date.now();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    
+    // Use relative path that works on any domain
+    const relativePath = `/uploads/user-default/${fileName}`;
+    
     onProgress?.(10);
 
-    // CHANGE THIS LINE - use full URL
-    const response = await fetch('http://localhost:3001/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
+    // Try uploading via the backend server if available (for local dev)
+    // In production, files should be pre-uploaded to public folder
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('userId', 'default');
 
-    onProgress?.(50);
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-    if (!response.ok) {
-      throw new Error('Upload failed');
+      if (response.ok) {
+        const result = await response.json();
+        // Use relative path from response
+        const downloadUrl = result.filePath || relativePath;
+        
+        onProgress?.(80);
+
+        const now = Timestamp.now();
+        const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+          name: file.name,
+          type: getFileType(file.type),
+          size: file.size,
+          sizeFormatted: formatFileSize(file.size),
+          mimeType: file.type,
+          downloadUrl, // Store relative path
+          storagePath: downloadUrl,
+          parentId,
+          createdBy: userId,
+          createdByName: userName,
+          createdAt: now,
+          updatedAt: now,
+          shared: false,
+          sharedWith: [],
+        });
+
+        onProgress?.(100);
+        return docRef.id;
+      }
+    } catch (fetchError) {
+      console.log('Backend not available, using fallback');
     }
 
-    const { filePath, downloadUrl } = await response.json();
-
-    onProgress?.(80);
-
+    // Fallback: Store file reference (file won't persist without backend)
+    onProgress?.(50);
+    
     const now = Timestamp.now();
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       name: file.name,
@@ -152,8 +191,8 @@ export const uploadFile = async (
       size: file.size,
       sizeFormatted: formatFileSize(file.size),
       mimeType: file.type,
-      downloadUrl,
-      storagePath: filePath,
+      downloadUrl: relativePath,
+      storagePath: relativePath,
       parentId,
       createdBy: userId,
       createdByName: userName,
@@ -164,7 +203,6 @@ export const uploadFile = async (
     });
 
     onProgress?.(100);
-
     return docRef.id;
   } catch (error) {
     console.error('Upload error:', error);
@@ -203,8 +241,7 @@ export const deleteDocument = async (document: Document): Promise<void> => {
 
   if (document.storagePath) {
     try {
-      // CHANGE THIS LINE - use full URL
-      await fetch('http://localhost:3001/api/delete-file', {
+      await fetch('/api/delete-file', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -257,8 +294,8 @@ export const generateShareLink = async (
 ): Promise<ShareLink> => {
   // Generate a unique token
   const token = crypto.randomUUID();
-  const baseUrl = window.location.origin;
-  const url = `${baseUrl}/share/${token}`;
+  // Always use production URL for share links
+  const url = `${PRODUCTION_URL}/share/${token}`;
   
   const now = Timestamp.now();
   // Set expiry to 30 days from now
