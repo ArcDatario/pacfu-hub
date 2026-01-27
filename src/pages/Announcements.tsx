@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Search, Pin, Clock, User, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Pin, Clock, User, MoreVertical, Edit, Trash2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Announcement } from '@/types/announcement';
 import { subscribeToAnnouncements, toggleAnnouncementPin } from '@/services/announcementService';
@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
 const categoryStyles = {
@@ -48,7 +49,29 @@ export default function Announcements() {
     return () => unsubscribe();
   }, []);
 
-  const filteredAnnouncements = announcements.filter(a =>
+  // Filter announcements based on user role and department/groups
+  const userFilteredAnnouncements = useMemo(() => {
+    if (!user) return announcements;
+    if (user.role === 'admin') return announcements; // Admin sees all
+    
+    return announcements.filter(a => {
+      const target = a.targetAudience;
+      if (!target || target.type === 'all') return true;
+      
+      if (target.type === 'department' && target.departments?.length) {
+        return target.departments.includes(user.department || '');
+      }
+      
+      if (target.type === 'group' && target.groups?.length) {
+        const userGroups = user.groups || [];
+        return target.groups.some(g => userGroups.includes(g));
+      }
+      
+      return true;
+    });
+  }, [announcements, user]);
+
+  const filteredAnnouncements = userFilteredAnnouncements.filter(a =>
     a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -189,12 +212,29 @@ interface AnnouncementCardProps {
 
 function AnnouncementCard({ announcement, isAdmin, onEdit, onDelete, onTogglePin }: AnnouncementCardProps) {
   const formattedDate = format(announcement.createdAt, 'MMM d, yyyy');
+  
+  const getTargetLabel = () => {
+    const target = announcement.targetAudience;
+    if (!target || target.type === 'all') return null;
+    
+    if (target.type === 'department' && target.departments?.length) {
+      return `${target.departments.length} department(s)`;
+    }
+    
+    if (target.type === 'group' && target.groups?.length) {
+      return `${target.groups.length} group(s)`;
+    }
+    
+    return null;
+  };
+
+  const targetLabel = getTargetLabel();
 
   return (
     <div className="rounded-xl bg-card p-6 shadow-card transition-all hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize",
               categoryStyles[announcement.category]
@@ -203,6 +243,12 @@ function AnnouncementCard({ announcement, isAdmin, onEdit, onDelete, onTogglePin
             </span>
             {announcement.isPinned && (
               <Pin className="h-3.5 w-3.5 text-accent" />
+            )}
+            {targetLabel && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <Users className="h-3 w-3" />
+                {targetLabel}
+              </Badge>
             )}
           </div>
           
