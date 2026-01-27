@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import nodemailer from "npm:nodemailer@6.9.10";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -110,7 +109,7 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
           <!-- CTA Button -->
           <tr>
             <td style="padding: 0 40px 32px 40px; text-align: center;">
-              <a href="#" style="display: inline-block; background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 14px 32px; border-radius: 8px; box-shadow: 0 2px 4px rgba(30, 58, 95, 0.3);">
+              <a href="https://psau-portal.lovable.app/announcements" style="display: inline-block; background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 14px 32px; border-radius: 8px; box-shadow: 0 2px 4px rgba(30, 58, 95, 0.3);">
                 View in Portal
               </a>
             </td>
@@ -151,6 +150,13 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      throw new Error("RESEND_API_KEY is not configured");
+    }
+
+    const resend = new Resend(resendApiKey);
+
     const { recipients, announcement }: AnnouncementEmailRequest = await req.json();
 
     // Validate required fields
@@ -175,16 +181,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Limit number of recipients to prevent abuse
     const limitedRecipients = recipients.slice(0, 100);
 
-    console.log(`Sending announcement email to ${limitedRecipients.length} recipients`);
-
-    // Create Nodemailer transporter with Gmail SMTP
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: Deno.env.get('SMTP_USER'),
-        pass: Deno.env.get('SMTP_PASS'),
-      },
-    });
+    console.log(`Sending announcement email to ${limitedRecipients.length} recipients using Resend`);
 
     // Send emails to all recipients
     const emailPromises = limitedRecipients.map(async (recipient) => {
@@ -196,16 +193,15 @@ const handler = async (req: Request): Promise<Response> => {
           return { email: recipient.email, success: false, error: 'Invalid email format' };
         }
 
-        const mailOptions = {
-          from: `"PACFU Portal" <${Deno.env.get('SMTP_USER')}>`,
-          to: recipient.email,
+        const emailResponse = await resend.emails.send({
+          from: "PACFU Portal <no-reply@ccs-ojt.online>",
+          to: [recipient.email],
           subject: `📢 ${sanitizedAnnouncement.category === 'urgent' ? '🚨 URGENT: ' : ''}${sanitizedAnnouncement.title}`,
           html: generateEmailHtml(sanitizedAnnouncement, recipient.name?.substring(0, 100) || 'Faculty Member'),
-        };
+        });
 
-        const result = await transporter.sendMail(mailOptions);
-        console.log(`Email sent to ${recipient.email}:`, result.messageId);
-        return { email: recipient.email, success: true, messageId: result.messageId };
+        console.log(`Email sent to ${recipient.email}:`, emailResponse);
+        return { email: recipient.email, success: true, id: emailResponse.data?.id };
       } catch (error: any) {
         console.error(`Failed to send email to ${recipient.email}:`, error);
         return { email: recipient.email, success: false, error: error.message };
