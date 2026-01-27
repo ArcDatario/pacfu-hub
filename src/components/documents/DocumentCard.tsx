@@ -168,12 +168,10 @@ export function DocumentCard({
                 <Pencil className="h-4 w-4 mr-2" />
                 Rename
               </DropdownMenuItem>
-              {isAdmin && (
-                <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onShare?.(doc))}>
-                  <Link2 className="h-4 w-4 mr-2" />
-                  Share Link
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onShare?.(doc))}>
+                <Link2 className="h-4 w-4 mr-2" />
+                Share Link
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem 
                 className="text-destructive"
@@ -236,12 +234,10 @@ export function DocumentCard({
               <Pencil className="h-4 w-4 mr-2" />
               Rename
             </DropdownMenuItem>
-            {isAdmin && (
-              <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onShare?.(doc))}>
-                <Link2 className="h-4 w-4 mr-2" />
-                Share Link
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onShare?.(doc))}>
+              <Link2 className="h-4 w-4 mr-2" />
+              Share Link
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               className="text-destructive"
