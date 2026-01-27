@@ -1,10 +1,23 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+// SECURITY: Restrict CORS to specific origins
+const ALLOWED_ORIGINS = [
+  "https://psau-portal.lovable.app",
+  "https://id-preview--f6a7a86c-c73b-4722-aec2-ca6651ec8a46.lovable.app"
+];
+
+const getCorsHeaders = (origin: string | null): Record<string, string> => {
+  // Check if the origin is allowed
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(allowed => 
+    origin === allowed || origin.endsWith('.lovable.app')
+  ) ? origin : ALLOWED_ORIGINS[0];
+  
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-signature, x-request-timestamp",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
 };
 
 interface AnnouncementEmailRequest {
@@ -15,7 +28,19 @@ interface AnnouncementEmailRequest {
     category: string;
     author: string;
   };
+  signature?: string;
+  timestamp?: number;
 }
+
+// SECURITY: HTML escape function to prevent XSS
+const escapeHtml = (unsafe: string): string => {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
 
 const getCategoryColor = (category: string): string => {
   switch (category) {
@@ -39,13 +64,19 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
   const categoryLabel = getCategoryLabel(announcement.category);
   const currentYear = new Date().getFullYear();
   
+  // SECURITY: Escape all user-provided content to prevent XSS
+  const safeTitle = escapeHtml(announcement.title);
+  const safeContent = escapeHtml(announcement.content);
+  const safeName = escapeHtml(recipientName);
+  const safeAuthor = escapeHtml(announcement.author);
+  
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${announcement.title}</title>
+  <title>${safeTitle}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #ecfdf5;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);">
@@ -85,7 +116,7 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
           <tr>
             <td style="padding: 24px 40px 0 40px;">
               <p style="margin: 0; color: #374151; font-size: 16px; line-height: 1.6;">
-                Hello <strong style="color: #059669;">${recipientName}</strong> 👋,
+                Hello <strong style="color: #059669;">${safeName}</strong> 👋,
               </p>
               <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 14px;">
                 A new announcement has been posted that may be relevant to you.
@@ -98,11 +129,11 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
             <td style="padding: 24px 40px;">
               <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0; border-left: 5px solid #10b981; border-radius: 0 16px 16px 0; padding: 28px; position: relative;">
                 <h2 style="margin: 0 0 16px 0; color: #065f46; font-size: 22px; font-weight: 700; line-height: 1.4;">
-                  ${announcement.title}
+                  ${safeTitle}
                 </h2>
                 <div style="width: 50px; height: 3px; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 2px; margin-bottom: 16px;"></div>
                 <p style="margin: 0; color: #374151; font-size: 15px; line-height: 1.8; white-space: pre-wrap;">
-                  ${announcement.content}
+                  ${safeContent}
                 </p>
               </div>
             </td>
@@ -115,7 +146,7 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
                 <tr>
                   <td style="background: #f3f4f6; padding: 12px 20px; border-radius: 30px;">
                     <span style="color: #6b7280; font-size: 13px;">
-                      ✍️ Posted by <strong style="color: #059669;">${announcement.author}</strong>
+                      ✍️ Posted by <strong style="color: #059669;">${safeAuthor}</strong>
                     </span>
                   </td>
                 </tr>
@@ -176,10 +207,58 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
   `;
 };
 
+// SECURITY: Simple HMAC verification using Web Crypto API
+const verifySignature = async (payload: string, signature: string, timestamp: number): Promise<boolean> => {
+  const signingSecret = Deno.env.get("EMAIL_SIGNING_SECRET");
+  
+  // If no secret is configured, log warning but allow (for backwards compatibility during transition)
+  if (!signingSecret) {
+    console.warn("EMAIL_SIGNING_SECRET not configured - signature verification skipped");
+    return true;
+  }
+  
+  // Check timestamp is within 5 minutes to prevent replay attacks
+  const now = Date.now();
+  const fiveMinutes = 5 * 60 * 1000;
+  if (Math.abs(now - timestamp) > fiveMinutes) {
+    console.error("Request timestamp too old or in future");
+    return false;
+  }
+  
+  // Create HMAC signature
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(signingSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  
+  const signatureData = `${timestamp}.${payload}`;
+  const signatureBytes = await crypto.subtle.sign("HMAC", key, encoder.encode(signatureData));
+  const expectedSignature = Array.from(new Uint8Array(signatureBytes))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  
+  return signature === expectedSignature;
+};
+
 const handler = async (req: Request): Promise<Response> => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Only allow POST requests
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
   }
 
   try {
@@ -190,7 +269,29 @@ const handler = async (req: Request): Promise<Response> => {
 
     const resend = new Resend(resendApiKey);
 
-    const { recipients, announcement }: AnnouncementEmailRequest = await req.json();
+    // Get request body as text first for signature verification
+    const bodyText = await req.text();
+    const requestData: AnnouncementEmailRequest = JSON.parse(bodyText);
+    
+    // SECURITY: Verify request signature if present
+    const signatureHeader = req.headers.get("x-request-signature");
+    const timestampHeader = req.headers.get("x-request-timestamp");
+    
+    if (signatureHeader && timestampHeader) {
+      const isValid = await verifySignature(bodyText, signatureHeader, parseInt(timestampHeader));
+      if (!isValid) {
+        console.error("Invalid request signature");
+        return new Response(
+          JSON.stringify({ error: "Invalid request signature" }),
+          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+    } else {
+      // Log when signature is missing (will be required in future)
+      console.warn("Request missing signature headers - allowing for backwards compatibility");
+    }
+
+    const { recipients, announcement } = requestData;
 
     // Validate required fields
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {

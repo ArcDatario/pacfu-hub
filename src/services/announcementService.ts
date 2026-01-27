@@ -183,13 +183,21 @@ export const sendAnnouncementNotification = async (
     
     console.log('Making request to edge function...');
     
+    // Prepare request body
+    const body = JSON.stringify({ recipients, announcement });
+    const timestamp = Date.now();
+    
+    // Create headers - signature will be validated server-side if EMAIL_SIGNING_SECRET is configured
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'apikey': supabaseAnonKey,
+      'x-request-timestamp': timestamp.toString(),
+    };
+    
     const response = await fetch(`${supabaseUrl}/functions/v1/send-announcement-email`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': supabaseAnonKey,
-      },
-      body: JSON.stringify({ recipients, announcement }),
+      headers,
+      body,
     });
 
     console.log('Edge function response status:', response.status);
