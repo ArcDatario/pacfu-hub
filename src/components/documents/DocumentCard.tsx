@@ -53,6 +53,15 @@ export function DocumentCard({
   const formattedDate = format(doc.createdAt, 'MMM d, yyyy');
 
   const handleClick = (e: React.MouseEvent) => {
+    // Prevent click if coming from dropdown or action button
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-radix-dropdown-menu-trigger]') || 
+        target.closest('button') || 
+        target.closest('[role="menuitem"]')) {
+      e.stopPropagation();
+      return;
+    }
+
     if (selectionMode) {
       e.stopPropagation();
       onSelect?.(doc);
@@ -75,6 +84,12 @@ export function DocumentCard({
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onSelect?.(doc);
+  };
+
+  const handleMenuItemClick = (e: React.MouseEvent, action: () => void) => {
+    e.stopPropagation();
+    e.preventDefault();
+    action();
   };
 
   if (viewMode === 'list') {
@@ -136,25 +151,25 @@ export function DocumentCard({
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               {doc.type !== 'folder' && (
-                <DropdownMenuItem onClick={() => onPreview?.(doc)}>
+                <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onPreview?.(doc))}>
                   <Eye className="h-4 w-4 mr-2" />
                   Preview
                 </DropdownMenuItem>
               )}
               {doc.type !== 'folder' && doc.downloadUrl && (
-                <DropdownMenuItem onClick={() => onDownload?.(doc)}>
+                <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onDownload?.(doc))}>
                   <Download className="h-4 w-4 mr-2" />
                   Download
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => onRename?.(doc)}>
+              <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onRename?.(doc))}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Rename
               </DropdownMenuItem>
               {isAdmin && (
-                <DropdownMenuItem onClick={() => onShare?.(doc)}>
+                <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onShare?.(doc))}>
                   <Link2 className="h-4 w-4 mr-2" />
                   Share Link
                 </DropdownMenuItem>
@@ -162,7 +177,7 @@ export function DocumentCard({
               <DropdownMenuSeparator />
               <DropdownMenuItem 
                 className="text-destructive"
-                onClick={() => onDelete?.(doc)}
+                onClick={(e) => handleMenuItemClick(e, () => onDelete?.(doc))}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
@@ -204,25 +219,25 @@ export function DocumentCard({
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
             {doc.type !== 'folder' && (
-              <DropdownMenuItem onClick={() => onPreview?.(doc)}>
+              <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onPreview?.(doc))}>
                 <Eye className="h-4 w-4 mr-2" />
                 Preview
               </DropdownMenuItem>
             )}
             {doc.type !== 'folder' && doc.downloadUrl && (
-              <DropdownMenuItem onClick={() => onDownload?.(doc)}>
+              <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onDownload?.(doc))}>
                 <Download className="h-4 w-4 mr-2" />
                 Download
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={() => onRename?.(doc)}>
+            <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onRename?.(doc))}>
               <Pencil className="h-4 w-4 mr-2" />
               Rename
             </DropdownMenuItem>
             {isAdmin && (
-              <DropdownMenuItem onClick={() => onShare?.(doc)}>
+              <DropdownMenuItem onClick={(e) => handleMenuItemClick(e, () => onShare?.(doc))}>
                 <Link2 className="h-4 w-4 mr-2" />
                 Share Link
               </DropdownMenuItem>
@@ -230,7 +245,7 @@ export function DocumentCard({
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               className="text-destructive"
-              onClick={() => onDelete?.(doc)}
+              onClick={(e) => handleMenuItemClick(e, () => onDelete?.(doc))}
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete

@@ -401,3 +401,26 @@ export const validateFileSize = (file: File): { valid: boolean; message?: string
   }
   return { valid: true };
 };
+
+// Force download a file (not preview)
+export const downloadFile = async (url: string, filename: string): Promise<void> => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up the blob URL
+    URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error('Download error:', error);
+    throw error;
+  }
+};
