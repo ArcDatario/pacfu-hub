@@ -13,6 +13,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { Document, getFileType, formatFileSize } from '@/types/document';
+import { supabase } from '@/integrations/supabase/client';
 
 const COLLECTION_NAME = 'documents';
 
@@ -118,7 +119,7 @@ export const createFolder = async (
 // Production base URL for the app
 const PRODUCTION_URL = 'https://psau-portal.lovable.app';
 
-// Upload a file to public folder
+// Upload a file to Lovable Cloud storage
 export const uploadFile = async (
   file: File,
   parentId: string | null,
@@ -130,60 +131,35 @@ export const uploadFile = async (
     // Create unique filename with timestamp
     const timestamp = Date.now();
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileName = `${timestamp}_${sanitizedFileName}`;
-    
-    // Use relative path that works on any domain
-    const relativePath = `/uploads/user-default/${fileName}`;
+    const fileName = `${userId}/${timestamp}_${sanitizedFileName}`;
     
     onProgress?.(10);
 
-    // Try uploading via the backend server if available (for local dev)
-    // In production, files should be pre-uploaded to public folder
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('userId', 'default');
-
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+    // Upload to Lovable Cloud storage
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        // Use relative path from response
-        const downloadUrl = result.filePath || relativePath;
-        
-        onProgress?.(80);
-
-        const now = Timestamp.now();
-        const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-          name: file.name,
-          type: getFileType(file.type),
-          size: file.size,
-          sizeFormatted: formatFileSize(file.size),
-          mimeType: file.type,
-          downloadUrl, // Store relative path
-          storagePath: downloadUrl,
-          parentId,
-          createdBy: userId,
-          createdByName: userName,
-          createdAt: now,
-          updatedAt: now,
-          shared: false,
-          sharedWith: [],
-        });
-
-        onProgress?.(100);
-        return docRef.id;
-      }
-    } catch (fetchError) {
-      console.log('Backend not available, using fallback');
+    if (error) {
+      console.error('Storage upload error:', error);
+      throw new Error(`Failed to upload file: ${error.message}`);
     }
 
-    // Fallback: Store file reference (file won't persist without backend)
-    onProgress?.(50);
-    
+    onProgress?.(60);
+
+    // Get the public URL
+    const { data: urlData } = supabase.storage
+      .from('documents')
+      .getPublicUrl(data.path);
+
+    const downloadUrl = urlData.publicUrl;
+
+    onProgress?.(80);
+
+    // Save metadata to Firebase Firestore
     const now = Timestamp.now();
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       name: file.name,
@@ -191,8 +167,8 @@ export const uploadFile = async (
       size: file.size,
       sizeFormatted: formatFileSize(file.size),
       mimeType: file.type,
-      downloadUrl: relativePath,
-      storagePath: relativePath,
+      downloadUrl,
+      storagePath: data.path, // Store the storage path for deletion
       parentId,
       createdBy: userId,
       createdByName: userName,
@@ -239,15 +215,16 @@ export const deleteDocument = async (document: Document): Promise<void> => {
     }
   }
 
-  if (document.storagePath) {
+  // Delete from Lovable Cloud storage if it has a storage path
+  if (document.storagePath && document.type !== 'folder') {
     try {
-      await fetch('/api/delete-file', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ filePath: document.storagePath }),
-      });
+      const { error } = await supabase.storage
+        .from('documents')
+        .remove([document.storagePath]);
+      
+      if (error) {
+        console.error('Error deleting file from storage:', error);
+      }
     } catch (error) {
       console.error('Error deleting file from storage:', error);
     }
