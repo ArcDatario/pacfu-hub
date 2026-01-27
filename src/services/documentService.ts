@@ -13,7 +13,12 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { Document, getFileType, formatFileSize } from '@/types/document';
-import { supabase } from '@/integrations/supabase/client';
+
+// Lazy-load Supabase client to avoid initialization errors
+const getSupabaseClient = async () => {
+  const { supabase } = await import('@/integrations/supabase/client');
+  return supabase;
+};
 
 const COLLECTION_NAME = 'documents';
 
@@ -138,6 +143,9 @@ export const uploadFile = async (
     
     onProgress?.(10);
 
+    // Get Supabase client lazily
+    const supabase = await getSupabaseClient();
+
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
@@ -221,6 +229,7 @@ export const deleteDocument = async (document: Document): Promise<void> => {
   // Delete file from Supabase Storage if it exists
   if (document.storagePath && document.type !== 'folder') {
     try {
+      const supabase = await getSupabaseClient();
       const { error } = await supabase.storage
         .from(STORAGE_BUCKET)
         .remove([document.storagePath]);
