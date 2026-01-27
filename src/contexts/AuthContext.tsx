@@ -8,7 +8,6 @@ import {
   initializeDefaultAdmin,
   createFacultyAccount
 } from '@/services/authService';
-import { requestNotificationPermission, setupForegroundMessageHandler } from '@/services/fcmService';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -42,14 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isAuthenticated: true,
             isLoading: false,
           });
-          
-          // Request notification permission and setup FCM for logged in users
-          try {
-            await requestNotificationPermission(firebaseUser.uid);
-            setupForegroundMessageHandler();
-          } catch (error) {
-            console.error('Failed to setup notifications:', error);
-          }
         } else {
           // User exists in Auth but not in Firestore or is deactivated
           await logoutUser();

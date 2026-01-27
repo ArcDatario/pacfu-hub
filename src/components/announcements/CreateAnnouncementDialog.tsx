@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,11 +23,10 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { createAnnouncement, getFacultyEmails, sendAnnouncementNotification, sendPushNotifications } from '@/services/announcementService';
+import { createAnnouncement, getFacultyEmails, sendAnnouncementNotification } from '@/services/announcementService';
 import { logAnnouncementAction } from '@/services/logService';
-import { AnnouncementCategory, TargetAudienceType } from '@/types/announcement';
+import { AnnouncementCategory } from '@/types/announcement';
 import { Loader2 } from 'lucide-react';
-import { subscribeToGroups } from '@/services/groupService';
 
 const formSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
@@ -35,21 +34,9 @@ const formSchema = z.object({
   category: z.enum(['general', 'urgent', 'event', 'memo']),
   isPinned: z.boolean(),
   sendNotification: z.boolean(),
-  targetType: z.enum(['all', 'department', 'group']),
-  targetDepartments: z.array(z.string()),
-  targetGroups: z.array(z.string()),
 });
 
 type FormData = z.infer<typeof formSchema>;
-
-const DEPARTMENTS = [
-  'College of Agriculture and Food Science',
-  'College of Arts and Sciences',
-  'College of Business Administration and Accountancy',
-  'College of Education',
-  'College of Engineering',
-  'College of Veterinary Medicine',
-];
 
 interface CreateAnnouncementDialogProps {
   open: boolean;
@@ -60,14 +47,6 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [groups, setGroups] = useState<string[]>([]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToGroups((groupList) => {
-      setGroups(groupList.map(g => g.name));
-    });
-    return () => unsubscribe();
-  }, []);
 
   const {
     register,
@@ -84,31 +63,18 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       category: 'general',
       isPinned: false,
       sendNotification: true,
-      targetType: 'all',
-      targetDepartments: [],
-      targetGroups: [],
     },
   });
 
   const category = watch('category');
   const isPinned = watch('isPinned');
   const sendNotification = watch('sendNotification');
-  const targetType = watch('targetType');
-  const targetDepartments = watch('targetDepartments');
-  const targetGroups = watch('targetGroups');
 
   const onSubmit = async (data: FormData) => {
     if (!user) return;
 
     setIsLoading(true);
     try {
-      // Build target audience
-      const targetAudience = {
-        type: data.targetType as TargetAudienceType,
-        departments: data.targetType === 'department' ? data.targetDepartments : undefined,
-        groups: data.targetType === 'group' ? data.targetGroups : undefined,
-      };
-
       // Create the announcement
       await createAnnouncement(
         {
@@ -116,56 +82,47 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
           content: data.content,
           category: data.category as AnnouncementCategory,
           isPinned: data.isPinned,
-          targetAudience,
         },
         user.id,
         user.name
       );
 
-      // If notifications are enabled, send email and push notifications
+      // If notifications are enabled, send email to faculty
       if (data.sendNotification) {
         try {
           console.log('Fetching faculty emails...');
-          const facultyList = await getFacultyEmails(targetAudience);
+          const facultyList = await getFacultyEmails();
           
           console.log('Faculty list:', facultyList);
           
           if (facultyList.length > 0) {
-            // Send email notifications
-            console.log('Sending email notifications to', facultyList.length, 'faculty members');
-            const emailResult = await sendAnnouncementNotification(facultyList, {
+            console.log('Sending notifications to', facultyList.length, 'faculty members');
+            const result = await sendAnnouncementNotification(facultyList, {
               title: data.title,
               content: data.content,
               category: data.category,
               author: user.name,
             });
             
-            if (emailResult.success) {
+            console.log('Notification result:', result);
+            
+            if (result.success) {
               toast({
-                title: 'Email notifications sent',
-                description: emailResult.message,
+                title: 'Notifications sent',
+                description: result.message,
               });
-            }
-
-            // Send push notifications
-            console.log('Sending push notifications...');
-            const pushResult = await sendPushNotifications(facultyList, {
-              title: `New Announcement: ${data.title}`,
-              body: data.content.substring(0, 100) + (data.content.length > 100 ? '...' : ''),
-              category: data.category,
-            });
-
-            if (pushResult.success) {
+            } else {
               toast({
-                title: 'Push notifications sent',
-                description: pushResult.message,
+                title: 'Notification warning',
+                description: `Announcement published, but email notifications failed: ${result.message}`,
+                variant: 'destructive',
               });
             }
           } else {
             console.warn('No active faculty members found to notify');
             toast({
               title: 'No faculty found',
-              description: 'No active faculty members matched the target audience.',
+              description: 'No active faculty members were found to send notifications to.',
               variant: 'destructive',
             });
           }
@@ -183,7 +140,6 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       await logAnnouncementAction('created', data.title, user.id, user.name, {
         category: data.category,
         isPinned: data.isPinned,
-        targetAudience,
       });
 
       toast({
@@ -210,27 +166,9 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
     onOpenChange(false);
   };
 
-  const toggleDepartment = (dept: string) => {
-    const current = targetDepartments || [];
-    if (current.includes(dept)) {
-      setValue('targetDepartments', current.filter(d => d !== dept));
-    } else {
-      setValue('targetDepartments', [...current, dept]);
-    }
-  };
-
-  const toggleGroup = (group: string) => {
-    const current = targetGroups || [];
-    if (current.includes(group)) {
-      setValue('targetGroups', current.filter(g => g !== group));
-    } else {
-      setValue('targetGroups', [...current, group]);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Create New Announcement</DialogTitle>
         </DialogHeader>
@@ -293,64 +231,6 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
             </div>
           </div>
 
-          {/* Target Audience Section */}
-          <div className="space-y-3 border-t pt-4">
-            <Label>Target Audience</Label>
-            <Select
-              value={targetType}
-              onValueChange={(value) => setValue('targetType', value as any)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select target audience" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Faculty Members</SelectItem>
-                <SelectItem value="department">Specific Departments</SelectItem>
-                <SelectItem value="group">Specific Groups</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {targetType === 'department' && (
-              <div className="space-y-2 pl-2">
-                <Label className="text-sm text-muted-foreground">Select Departments</Label>
-                <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto">
-                  {DEPARTMENTS.map((dept) => (
-                    <div key={dept} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`dept-${dept}`}
-                        checked={targetDepartments?.includes(dept)}
-                        onCheckedChange={() => toggleDepartment(dept)}
-                      />
-                      <Label htmlFor={`dept-${dept}`} className="font-normal text-sm">
-                        {dept}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {targetType === 'group' && (
-              <div className="space-y-2 pl-2">
-                <Label className="text-sm text-muted-foreground">Select Groups</Label>
-                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                  {groups.map((group) => (
-                    <div key={group} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`group-${group}`}
-                        checked={targetGroups?.includes(group)}
-                        onCheckedChange={() => toggleGroup(group)}
-                      />
-                      <Label htmlFor={`group-${group}`} className="font-normal text-sm">
-                        {group}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
           <div className="flex items-center space-x-2 pt-2 border-t">
             <Checkbox
               id="sendNotification"
@@ -358,7 +238,7 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
               onCheckedChange={(checked) => setValue('sendNotification', checked === true)}
             />
             <Label htmlFor="sendNotification" className="font-normal">
-              Notify faculty members (email & push notification)
+              Notify all faculty members (email & push notification)
             </Label>
           </div>
 

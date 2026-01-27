@@ -6,9 +6,6 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
-  department?: string;
-  position?: string;
-  groups?: string[];
   isActive: boolean;
   createdAt: Date;
 }
