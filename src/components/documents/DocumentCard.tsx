@@ -1,5 +1,6 @@
 import { Document } from '@/types/document';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,83 +9,90 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { 
-  FolderOpen, 
-  FileText, 
-  Image, 
-  FileSpreadsheet,
-  File,
   MoreVertical,
   Download,
   Trash2,
   Pencil,
-  Share2,
-  Users
+  Link2,
+  Users,
+  Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { FilePreview } from './FilePreview';
 
 interface DocumentCardProps {
   document: Document;
   viewMode: 'grid' | 'list';
+  isSelected?: boolean;
+  selectionMode?: boolean;
+  onSelect?: (doc: Document) => void;
   onOpen?: (doc: Document) => void;
+  onPreview?: (doc: Document) => void;
   onDownload?: (doc: Document) => void;
   onRename?: (doc: Document) => void;
   onDelete?: (doc: Document) => void;
-  onToggleShare?: (doc: Document) => void;
+  onShare?: (doc: Document) => void;
   isAdmin?: boolean;
 }
-
-const typeIcons = {
-  folder: FolderOpen,
-  pdf: FileText,
-  doc: FileText,
-  image: Image,
-  spreadsheet: FileSpreadsheet,
-  other: File,
-};
-
-const typeColors = {
-  folder: 'text-accent',
-  pdf: 'text-destructive',
-  doc: 'text-primary',
-  image: 'text-success',
-  spreadsheet: 'text-success',
-  other: 'text-muted-foreground',
-};
 
 export function DocumentCard({ 
   document: doc, 
   viewMode, 
+  isSelected = false,
+  selectionMode = false,
+  onSelect,
   onOpen,
+  onPreview,
   onDownload,
   onRename,
   onDelete,
-  onToggleShare,
+  onShare,
   isAdmin
 }: DocumentCardProps) {
-  const Icon = typeIcons[doc.type];
   const formattedDate = format(doc.createdAt, 'MMM d, yyyy');
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    if (selectionMode) {
+      e.stopPropagation();
+      onSelect?.(doc);
+      return;
+    }
+    
     if (doc.type === 'folder') {
       onOpen?.(doc);
     }
   };
 
-  const handleDoubleClick = () => {
-    if (doc.type !== 'folder' && doc.downloadUrl) {
-      window.open(doc.downloadUrl, '_blank');
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (selectionMode) return;
+    
+    if (doc.type !== 'folder') {
+      onPreview?.(doc);
     }
+  };
+
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect?.(doc);
   };
 
   if (viewMode === 'list') {
     return (
       <div 
-        className="flex items-center gap-4 rounded-lg bg-card p-4 shadow-sm hover:shadow-card transition-shadow cursor-pointer"
+        className={cn(
+          "flex items-center gap-4 rounded-lg bg-card p-4 shadow-sm hover:shadow-card transition-shadow cursor-pointer",
+          isSelected && "ring-2 ring-primary bg-primary/5"
+        )}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       >
-        <Icon className={cn("h-8 w-8", typeColors[doc.type])} />
+        {selectionMode && (
+          <div onClick={handleCheckboxClick}>
+            <Checkbox checked={isSelected} />
+          </div>
+        )}
+        <FilePreview document={doc} size="sm" />
         <div className="flex-1 min-w-0">
           <p className="font-medium text-card-foreground truncate">{doc.name}</p>
           <p className="text-xs text-muted-foreground">
@@ -97,6 +105,18 @@ export function DocumentCard({
               <Users className="h-3 w-3" />
               Shared
             </span>
+          )}
+          {doc.type !== 'folder' && (
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview?.(doc);
+              }}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
           )}
           {doc.type !== 'folder' && doc.downloadUrl && (
             <Button 
@@ -117,14 +137,26 @@ export function DocumentCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {doc.type !== 'folder' && (
+                <DropdownMenuItem onClick={() => onPreview?.(doc)}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Preview
+                </DropdownMenuItem>
+              )}
+              {doc.type !== 'folder' && doc.downloadUrl && (
+                <DropdownMenuItem onClick={() => onDownload?.(doc)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => onRename?.(doc)}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Rename
               </DropdownMenuItem>
               {isAdmin && (
-                <DropdownMenuItem onClick={() => onToggleShare?.(doc)}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  {doc.shared ? 'Make Private' : 'Share'}
+                <DropdownMenuItem onClick={() => onShare?.(doc)}>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Share Link
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -142,14 +174,26 @@ export function DocumentCard({
     );
   }
 
+  // Grid view
   return (
     <div 
-      className="group rounded-xl bg-card p-4 shadow-card transition-all hover:shadow-card-hover cursor-pointer"
+      className={cn(
+        "group rounded-xl bg-card p-4 shadow-card transition-all hover:shadow-card-hover cursor-pointer relative",
+        isSelected && "ring-2 ring-primary bg-primary/5"
+      )}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
     >
+      {selectionMode && (
+        <div 
+          className="absolute top-2 left-2 z-10"
+          onClick={handleCheckboxClick}
+        >
+          <Checkbox checked={isSelected} />
+        </div>
+      )}
       <div className="flex items-start justify-between mb-4">
-        <Icon className={cn("h-10 w-10", typeColors[doc.type])} />
+        <FilePreview document={doc} size="md" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <Button 
@@ -161,6 +205,12 @@ export function DocumentCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {doc.type !== 'folder' && (
+              <DropdownMenuItem onClick={() => onPreview?.(doc)}>
+                <Eye className="h-4 w-4 mr-2" />
+                Preview
+              </DropdownMenuItem>
+            )}
             {doc.type !== 'folder' && doc.downloadUrl && (
               <DropdownMenuItem onClick={() => onDownload?.(doc)}>
                 <Download className="h-4 w-4 mr-2" />
@@ -172,9 +222,9 @@ export function DocumentCard({
               Rename
             </DropdownMenuItem>
             {isAdmin && (
-              <DropdownMenuItem onClick={() => onToggleShare?.(doc)}>
-                <Share2 className="h-4 w-4 mr-2" />
-                {doc.shared ? 'Make Private' : 'Share'}
+              <DropdownMenuItem onClick={() => onShare?.(doc)}>
+                <Link2 className="h-4 w-4 mr-2" />
+                Share Link
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

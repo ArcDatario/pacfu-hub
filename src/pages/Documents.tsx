@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Upload, 
   Search, 
@@ -10,22 +11,27 @@ import {
   List,
   Plus,
   ChevronRight,
-  Home
+  Home,
+  Download,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { Document, Breadcrumb } from '@/types/document';
 import { 
   subscribeToDocuments, 
-  getDocument, 
-  toggleShareDocument 
+  getAllFilesInFolder
 } from '@/services/documentService';
 import { DocumentCard } from '@/components/documents/DocumentCard';
 import { UploadFileDialog } from '@/components/documents/UploadFileDialog';
 import { CreateFolderDialog } from '@/components/documents/CreateFolderDialog';
 import { DeleteDocumentDialog } from '@/components/documents/DeleteDocumentDialog';
 import { RenameDocumentDialog } from '@/components/documents/RenameDocumentDialog';
+import { FilePreviewDialog } from '@/components/documents/FilePreviewDialog';
+import { ShareLinkDialog } from '@/components/documents/ShareLinkDialog';
+import { useDocumentSelection } from '@/hooks/useDocumentSelection';
 import { toast } from '@/hooks/use-toast';
+import JSZip from 'jszip';
 
 export default function Documents() {
   const { user } = useAuth();
@@ -43,7 +49,22 @@ export default function Documents() {
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+
+  // Selection state
+  const {
+    selectedCount,
+    toggleSelection,
+    selectAll,
+    clearSelection,
+    isSelected,
+    getSelectedDocuments,
+  } = useDocumentSelection();
+  
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   // Subscribe to documents
   useEffect(() => {
@@ -81,6 +102,11 @@ export default function Documents() {
     }
   };
 
+  const handlePreview = (doc: Document) => {
+    setSelectedDocument(doc);
+    setPreviewDialogOpen(true);
+  };
+
   const handleRename = (doc: Document) => {
     setSelectedDocument(doc);
     setRenameDialogOpen(true);
@@ -91,20 +117,91 @@ export default function Documents() {
     setDeleteDialogOpen(true);
   };
 
-  const handleToggleShare = async (doc: Document) => {
+  const handleShare = (doc: Document) => {
+    setSelectedDocument(doc);
+    setShareDialogOpen(true);
+  };
+
+  const handleSelect = (doc: Document) => {
+    toggleSelection(doc.id);
+  };
+
+  const handleSelectAll = () => {
+    selectAll(filteredDocs);
+  };
+
+  const handleClearSelection = () => {
+    clearSelection();
+    setSelectionMode(false);
+  };
+
+  const handleDownloadSelected = async () => {
+    const selected = getSelectedDocuments(documents);
+    if (selected.length === 0) return;
+
+    // If only one file selected (not folder), download directly
+    if (selected.length === 1 && selected[0].type !== 'folder') {
+      handleDownload(selected[0]);
+      return;
+    }
+
+    setDownloadingZip(true);
     try {
-      await toggleShareDocument(doc.id, !doc.shared);
+      const zip = new JSZip();
+      
+      for (const doc of selected) {
+        if (doc.type === 'folder') {
+          // Get all files in folder recursively
+          const folderFiles = await getAllFilesInFolder(doc.id);
+          const folder = zip.folder(doc.name);
+          
+          for (const file of folderFiles) {
+            if (file.downloadUrl) {
+              try {
+                const response = await fetch(file.downloadUrl);
+                const blob = await response.blob();
+                folder?.file(file.name, blob);
+              } catch (error) {
+                console.error(`Failed to fetch ${file.name}:`, error);
+              }
+            }
+          }
+        } else if (doc.downloadUrl) {
+          try {
+            const response = await fetch(doc.downloadUrl);
+            const blob = await response.blob();
+            zip.file(doc.name, blob);
+          } catch (error) {
+            console.error(`Failed to fetch ${doc.name}:`, error);
+          }
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `documents-${Date.now()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
       toast({
-        title: 'Success',
-        description: doc.shared ? 'Document is now private' : 'Document is now shared',
+        title: 'Download complete',
+        description: `${selected.length} item(s) downloaded as ZIP`,
       });
+
+      handleClearSelection();
     } catch (error) {
-      console.error('Error toggling share:', error);
+      console.error('ZIP download error:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to update sharing settings',
+        title: 'Download failed',
+        description: 'Failed to create ZIP file',
         variant: 'destructive',
       });
+    } finally {
+      setDownloadingZip(false);
     }
   };
 
@@ -159,6 +256,36 @@ export default function Documents() {
           ))}
         </div>
 
+        {/* Selection Bar */}
+        {selectionMode && (
+          <div className="flex items-center justify-between bg-muted p-3 rounded-lg">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="sm" onClick={handleClearSelection}>
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {selectedCount} item(s) selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                Select All
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleDownloadSelected}
+                disabled={selectedCount === 0 || downloadingZip}
+                className="gap-2"
+              >
+                <Download className="h-4 w-4" />
+                {downloadingZip ? 'Creating ZIP...' : 'Download as ZIP'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Toolbar */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-md flex-1">
@@ -171,6 +298,15 @@ export default function Documents() {
             />
           </div>
           <div className="flex items-center gap-2">
+            {!selectionMode && filteredDocs.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectionMode(true)}
+              >
+                Select
+              </Button>
+            )}
             <Button
               variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
               size="icon"
@@ -209,10 +345,13 @@ export default function Documents() {
                       key={doc.id} 
                       document={doc} 
                       viewMode={viewMode}
+                      isSelected={isSelected(doc.id)}
+                      selectionMode={selectionMode}
+                      onSelect={handleSelect}
                       onOpen={navigateToFolder}
                       onRename={handleRename}
                       onDelete={handleDelete}
-                      onToggleShare={handleToggleShare}
+                      onShare={handleShare}
                       isAdmin={isAdmin}
                     />
                   ))}
@@ -234,10 +373,14 @@ export default function Documents() {
                       key={doc.id} 
                       document={doc} 
                       viewMode={viewMode}
+                      isSelected={isSelected(doc.id)}
+                      selectionMode={selectionMode}
+                      onSelect={handleSelect}
+                      onPreview={handlePreview}
                       onDownload={handleDownload}
                       onRename={handleRename}
                       onDelete={handleDelete}
-                      onToggleShare={handleToggleShare}
+                      onShare={handleShare}
                       isAdmin={isAdmin}
                     />
                   ))}
@@ -280,6 +423,17 @@ export default function Documents() {
         open={renameDialogOpen} 
         onOpenChange={setRenameDialogOpen} 
         document={selectedDocument} 
+      />
+      <FilePreviewDialog
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        document={selectedDocument}
+        onDownload={handleDownload}
+      />
+      <ShareLinkDialog
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        document={selectedDocument}
       />
     </DashboardLayout>
   );
