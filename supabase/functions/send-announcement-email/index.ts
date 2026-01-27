@@ -183,14 +183,20 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Sending announcement email to ${limitedRecipients.length} recipients using Resend`);
 
-    // Send emails to all recipients
-    const emailPromises = limitedRecipients.map(async (recipient) => {
+    // Helper function to delay execution
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Send emails sequentially with delay to avoid rate limiting (Resend free plan: 2 req/sec)
+    const results: { email: string; success: boolean; id?: string; error?: string }[] = [];
+    
+    for (const recipient of limitedRecipients) {
       try {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(recipient.email)) {
           console.error(`Invalid email format: ${recipient.email}`);
-          return { email: recipient.email, success: false, error: 'Invalid email format' };
+          results.push({ email: recipient.email, success: false, error: 'Invalid email format' });
+          continue;
         }
 
         const emailResponse = await resend.emails.send({
@@ -201,14 +207,17 @@ const handler = async (req: Request): Promise<Response> => {
         });
 
         console.log(`Email sent to ${recipient.email}:`, emailResponse);
-        return { email: recipient.email, success: true, id: emailResponse.data?.id };
+        results.push({ email: recipient.email, success: true, id: emailResponse.data?.id });
+        
+        // Wait 600ms between emails to stay under rate limit (2 req/sec)
+        await delay(600);
       } catch (error: any) {
         console.error(`Failed to send email to ${recipient.email}:`, error);
-        return { email: recipient.email, success: false, error: error.message };
+        results.push({ email: recipient.email, success: false, error: error.message });
+        // Still wait even on error to avoid rate limiting
+        await delay(600);
       }
-    });
-
-    const results = await Promise.all(emailPromises);
+    }
     
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
