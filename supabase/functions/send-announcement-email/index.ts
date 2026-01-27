@@ -4,18 +4,20 @@ import { Resend } from "npm:resend@2.0.0";
 // SECURITY: Restrict CORS to specific origins
 const ALLOWED_ORIGINS = [
   "https://psau-portal.lovable.app",
-  "https://id-preview--f6a7a86c-c73b-4722-aec2-ca6651ec8a46.lovable.app"
+  "https://id-preview--f6a7a86c-c73b-4722-aec2-ca6651ec8a46.lovable.app",
 ];
 
 const getCorsHeaders = (origin: string | null): Record<string, string> => {
   // Check if the origin is allowed
-  const allowedOrigin = origin && ALLOWED_ORIGINS.some(allowed => 
-    origin === allowed || origin.endsWith('.lovable.app')
-  ) ? origin : ALLOWED_ORIGINS[0];
-  
+  const allowedOrigin =
+    origin && ALLOWED_ORIGINS.some((allowed) => origin === allowed || origin.endsWith(".lovable.app"))
+      ? origin
+      : ALLOWED_ORIGINS[0];
+
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-signature, x-request-timestamp",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-request-signature, x-request-timestamp",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 };
@@ -35,23 +37,23 @@ interface AnnouncementEmailRequest {
 // SECURITY: HTML escape function to prevent XSS
 const escapeHtml = (unsafe: string): string => {
   return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 };
 
 const getCategoryColor = (category: string): string => {
   switch (category) {
-    case 'urgent':
-      return '#DC2626';
-    case 'event':
-      return '#059669';
-    case 'memo':
-      return '#6B7280';
+    case "urgent":
+      return "#DC2626";
+    case "event":
+      return "#059669";
+    case "memo":
+      return "#6B7280";
     default:
-      return '#2563EB';
+      return "#2563EB";
   }
 };
 
@@ -59,17 +61,17 @@ const getCategoryLabel = (category: string): string => {
   return category.charAt(0).toUpperCase() + category.slice(1);
 };
 
-const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'], recipientName: string): string => {
+const generateEmailHtml = (announcement: AnnouncementEmailRequest["announcement"], recipientName: string): string => {
   const categoryColor = getCategoryColor(announcement.category);
   const categoryLabel = getCategoryLabel(announcement.category);
   const currentYear = new Date().getFullYear();
-  
+
   // SECURITY: Escape all user-provided content to prevent XSS
   const safeTitle = escapeHtml(announcement.title);
   const safeContent = escapeHtml(announcement.content);
   const safeName = escapeHtml(recipientName);
   const safeAuthor = escapeHtml(announcement.author);
-  
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -127,7 +129,7 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
           <!-- Announcement Content Card -->
           <tr>
             <td style="padding: 24px 40px;">
-              <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0; border-left: 5px solid #10b981; border-radius: 0 16px 16px 0; padding: 28px; position: relative;">
+              <div style="background: transparent; border: 1px solid #a7f3d0; border-left: 5px solid #10b981; border-radius: 0 16px 16px 0; padding: 28px; position: relative;">
                 <h2 style="margin: 0 0 16px 0; color: #065f46; font-size: 22px; font-weight: 700; line-height: 1.4;">
                   ${safeTitle}
                 </h2>
@@ -210,13 +212,13 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
 // SECURITY: Simple HMAC verification using Web Crypto API
 const verifySignature = async (payload: string, signature: string, timestamp: number): Promise<boolean> => {
   const signingSecret = Deno.env.get("EMAIL_SIGNING_SECRET");
-  
+
   // If no secret is configured, log warning but allow (for backwards compatibility during transition)
   if (!signingSecret) {
     console.warn("EMAIL_SIGNING_SECRET not configured - signature verification skipped");
     return true;
   }
-  
+
   // Check timestamp is within 5 minutes to prevent replay attacks
   const now = Date.now();
   const fiveMinutes = 5 * 60 * 1000;
@@ -224,7 +226,7 @@ const verifySignature = async (payload: string, signature: string, timestamp: nu
     console.error("Request timestamp too old or in future");
     return false;
   }
-  
+
   // Create HMAC signature
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -232,15 +234,15 @@ const verifySignature = async (payload: string, signature: string, timestamp: nu
     encoder.encode(signingSecret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
-  
+
   const signatureData = `${timestamp}.${payload}`;
   const signatureBytes = await crypto.subtle.sign("HMAC", key, encoder.encode(signatureData));
   const expectedSignature = Array.from(new Uint8Array(signatureBytes))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-  
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
   return signature === expectedSignature;
 };
 
@@ -255,10 +257,10 @@ const handler = async (req: Request): Promise<Response> => {
 
   // Only allow POST requests
   if (req.method !== "POST") {
-    return new Response(
-      JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 
   try {
@@ -272,19 +274,19 @@ const handler = async (req: Request): Promise<Response> => {
     // Get request body as text first for signature verification
     const bodyText = await req.text();
     const requestData: AnnouncementEmailRequest = JSON.parse(bodyText);
-    
+
     // SECURITY: Verify request signature if present
     const signatureHeader = req.headers.get("x-request-signature");
     const timestampHeader = req.headers.get("x-request-timestamp");
-    
+
     if (signatureHeader && timestampHeader) {
       const isValid = await verifySignature(bodyText, signatureHeader, parseInt(timestampHeader));
       if (!isValid) {
         console.error("Invalid request signature");
-        return new Response(
-          JSON.stringify({ error: "Invalid request signature" }),
-          { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+        return new Response(JSON.stringify({ error: "Invalid request signature" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
       }
     } else {
       // Log when signature is missing (will be required in future)
@@ -306,9 +308,9 @@ const handler = async (req: Request): Promise<Response> => {
     const sanitizedAnnouncement = {
       title: announcement.title.substring(0, 200),
       content: announcement.content.substring(0, 5000),
-      category: ['general', 'urgent', 'event', 'memo'].includes(announcement.category) 
-        ? announcement.category 
-        : 'general',
+      category: ["general", "urgent", "event", "memo"].includes(announcement.category)
+        ? announcement.category
+        : "general",
       author: announcement.author.substring(0, 100),
     };
 
@@ -318,31 +320,31 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`Sending announcement email to ${limitedRecipients.length} recipients using Resend`);
 
     // Helper function to delay execution
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
     // Send emails sequentially with delay to avoid rate limiting (Resend free plan: 2 req/sec)
     const results: { email: string; success: boolean; id?: string; error?: string }[] = [];
-    
+
     for (const recipient of limitedRecipients) {
       try {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(recipient.email)) {
           console.error(`Invalid email format: ${recipient.email}`);
-          results.push({ email: recipient.email, success: false, error: 'Invalid email format' });
+          results.push({ email: recipient.email, success: false, error: "Invalid email format" });
           continue;
         }
 
         const emailResponse = await resend.emails.send({
           from: "PACFU Portal <no-reply@ccs-ojt.online>",
           to: [recipient.email],
-          subject: `📢 ${sanitizedAnnouncement.category === 'urgent' ? '🚨 URGENT: ' : ''}${sanitizedAnnouncement.title}`,
-          html: generateEmailHtml(sanitizedAnnouncement, recipient.name?.substring(0, 100) || 'Faculty Member'),
+          subject: `📢 ${sanitizedAnnouncement.category === "urgent" ? "🚨 URGENT: " : ""}${sanitizedAnnouncement.title}`,
+          html: generateEmailHtml(sanitizedAnnouncement, recipient.name?.substring(0, 100) || "Faculty Member"),
         });
 
         console.log(`Email sent to ${recipient.email}:`, emailResponse);
         results.push({ email: recipient.email, success: true, id: emailResponse.data?.id });
-        
+
         // Wait 600ms between emails to stay under rate limit (2 req/sec)
         await delay(600);
       } catch (error: any) {
@@ -352,18 +354,18 @@ const handler = async (req: Request): Promise<Response> => {
         await delay(600);
       }
     }
-    
-    const successCount = results.filter(r => r.success).length;
-    const failCount = results.filter(r => !r.success).length;
+
+    const successCount = results.filter((r) => r.success).length;
+    const failCount = results.filter((r) => !r.success).length;
 
     console.log(`Email sending complete: ${successCount} success, ${failCount} failed`);
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         message: `Emails sent successfully`,
         successCount,
         failCount,
-        results 
+        results,
       }),
       {
         status: 200,
@@ -371,17 +373,14 @@ const handler = async (req: Request): Promise<Response> => {
           "Content-Type": "application/json",
           ...corsHeaders,
         },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error in send-announcement-email function:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 };
 
