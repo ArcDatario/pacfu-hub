@@ -3,7 +3,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Search, Pin, Clock, User, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Pin, Clock, User, MoreVertical, Edit, Trash2, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Announcement } from '@/types/announcement';
 import { subscribeToAnnouncements, toggleAnnouncementPin } from '@/services/announcementService';
@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
 const categoryStyles = {
   general: 'bg-primary/10 text-primary',
@@ -28,6 +29,7 @@ const categoryStyles = {
 export default function Announcements() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const userDepartment = user?.department;
   const [searchQuery, setSearchQuery] = useState('');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,10 +50,19 @@ export default function Announcements() {
     return () => unsubscribe();
   }, []);
 
-  const filteredAnnouncements = announcements.filter(a =>
-    a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.content.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter announcements based on search and user's department
+  const filteredAnnouncements = announcements.filter(a => {
+    // Search filter
+    const matchesSearch = a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.content.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Department filter - admins see all, faculty only sees 'all' or their department
+    const matchesDepartment = isAdmin || 
+      a.audience === 'all' || 
+      (a.audience === 'department' && a.department === userDepartment);
+    
+    return matchesSearch && matchesDepartment;
+  });
 
   const pinnedAnnouncements = filteredAnnouncements.filter(a => a.isPinned);
   const regularAnnouncements = filteredAnnouncements.filter(a => !a.isPinned);
@@ -194,7 +205,7 @@ function AnnouncementCard({ announcement, isAdmin, onEdit, onDelete, onTogglePin
     <div className="rounded-xl bg-card p-6 shadow-card transition-all hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize",
               categoryStyles[announcement.category]
@@ -203,6 +214,12 @@ function AnnouncementCard({ announcement, isAdmin, onEdit, onDelete, onTogglePin
             </span>
             {announcement.isPinned && (
               <Pin className="h-3.5 w-3.5 text-accent" />
+            )}
+            {announcement.audience === 'department' && announcement.department && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <Building2 className="h-3 w-3" />
+                {announcement.department}
+              </Badge>
             )}
           </div>
           

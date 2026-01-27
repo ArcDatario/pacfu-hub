@@ -47,93 +47,126 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest['announcement'
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${announcement.title}</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background-color: #f3f4f6;">
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #ecfdf5;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);">
     <tr>
       <td align="center" style="padding: 40px 20px;">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px -10px rgba(16, 185, 129, 0.3);">
           
-          <!-- Header -->
+          <!-- Header with Green Gradient -->
           <tr>
-            <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 32px 40px; text-align: center;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">
-                📢 PACFU Portal
+            <td style="background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%); padding: 40px 40px; text-align: center;">
+              <div style="background: rgba(255,255,255,0.15); display: inline-block; padding: 12px 20px; border-radius: 50px; margin-bottom: 16px;">
+                <span style="font-size: 28px;">📢</span>
+              </div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                PACFU Portal
               </h1>
-              <p style="margin: 8px 0 0 0; color: rgba(255, 255, 255, 0.85); font-size: 14px;">
-                New Announcement
+              <p style="margin: 12px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 15px; font-weight: 500;">
+                ✨ New Announcement
               </p>
             </td>
           </tr>
           
           <!-- Category Badge -->
           <tr>
-            <td style="padding: 24px 40px 0 40px;">
-              <span style="display: inline-block; background-color: ${categoryColor}15; color: ${categoryColor}; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px;">
-                ${categoryLabel}
-              </span>
+            <td style="padding: 28px 40px 0 40px;">
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="background: linear-gradient(135deg, ${categoryColor}20 0%, ${categoryColor}10 100%); border: 1px solid ${categoryColor}30; color: ${categoryColor}; font-size: 11px; font-weight: 700; padding: 8px 16px; border-radius: 25px; text-transform: uppercase; letter-spacing: 1px;">
+                    ${categoryLabel}
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           
           <!-- Greeting -->
           <tr>
-            <td style="padding: 20px 40px 0 40px;">
-              <p style="margin: 0; color: #374151; font-size: 16px;">
-                Hello <strong>${recipientName}</strong>,
+            <td style="padding: 24px 40px 0 40px;">
+              <p style="margin: 0; color: #374151; font-size: 16px; line-height: 1.6;">
+                Hello <strong style="color: #059669;">${recipientName}</strong> 👋,
+              </p>
+              <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 14px;">
+                A new announcement has been posted that may be relevant to you.
               </p>
             </td>
           </tr>
           
-          <!-- Announcement Content -->
+          <!-- Announcement Content Card -->
           <tr>
-            <td style="padding: 20px 40px;">
-              <div style="background-color: #f9fafb; border-left: 4px solid ${categoryColor}; border-radius: 0 8px 8px 0; padding: 24px;">
-                <h2 style="margin: 0 0 16px 0; color: #111827; font-size: 20px; font-weight: 600; line-height: 1.4;">
+            <td style="padding: 24px 40px;">
+              <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #a7f3d0; border-left: 5px solid #10b981; border-radius: 0 16px 16px 0; padding: 28px; position: relative;">
+                <h2 style="margin: 0 0 16px 0; color: #065f46; font-size: 22px; font-weight: 700; line-height: 1.4;">
                   ${announcement.title}
                 </h2>
-                <p style="margin: 0; color: #4b5563; font-size: 15px; line-height: 1.7; white-space: pre-wrap;">
+                <div style="width: 50px; height: 3px; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 2px; margin-bottom: 16px;"></div>
+                <p style="margin: 0; color: #374151; font-size: 15px; line-height: 1.8; white-space: pre-wrap;">
                   ${announcement.content}
                 </p>
               </div>
             </td>
           </tr>
           
-          <!-- Author Info -->
+          <!-- Author Info with Icon -->
           <tr>
-            <td style="padding: 0 40px 24px 40px;">
-              <p style="margin: 0; color: #6b7280; font-size: 13px;">
-                Posted by <strong style="color: #374151;">${announcement.author}</strong>
-              </p>
+            <td style="padding: 0 40px 28px 40px;">
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="background: #f3f4f6; padding: 12px 20px; border-radius: 30px;">
+                    <span style="color: #6b7280; font-size: 13px;">
+                      ✍️ Posted by <strong style="color: #059669;">${announcement.author}</strong>
+                    </span>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           
-          <!-- CTA Button -->
+          <!-- CTA Button with Green Gradient -->
           <tr>
-            <td style="padding: 0 40px 32px 40px; text-align: center;">
-              <a href="https://psau-portal.lovable.app/announcements" style="display: inline-block; background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 14px 32px; border-radius: 8px; box-shadow: 0 2px 4px rgba(30, 58, 95, 0.3);">
-                View in Portal
+            <td style="padding: 0 40px 36px 40px; text-align: center;">
+              <a href="https://psau-portal.lovable.app/announcements" style="display: inline-block; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600; padding: 16px 40px; border-radius: 30px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); transition: all 0.3s ease;">
+                🔗 View in Portal
               </a>
             </td>
           </tr>
           
-          <!-- Divider -->
+          <!-- Divider with Gradient -->
           <tr>
             <td style="padding: 0 40px;">
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 0;">
+              <div style="height: 2px; background: linear-gradient(90deg, transparent, #a7f3d0, transparent);"></div>
             </td>
           </tr>
           
           <!-- Footer -->
           <tr>
-            <td style="padding: 24px 40px 32px 40px; text-align: center;">
-              <p style="margin: 0 0 8px 0; color: #9ca3af; font-size: 12px;">
-                This is an automated notification from PACFU Portal.
+            <td style="padding: 28px 40px 36px 40px; text-align: center; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);">
+              <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;">
+                🔔 This is an automated notification from PACFU Portal.
               </p>
-              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-                © ${currentYear} PACFU - Pampanga State Agricultural University
+              <p style="margin: 0 0 12px 0; color: #9ca3af; font-size: 12px;">
+                You received this email because you are a faculty member.
               </p>
+              <div style="margin-top: 16px;">
+                <p style="margin: 0; color: #10b981; font-size: 12px; font-weight: 600;">
+                  © ${currentYear} PACFU - Pampanga State Agricultural University
+                </p>
+              </div>
             </td>
           </tr>
           
+        </table>
+        
+        <!-- Footer Links -->
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%;">
+          <tr>
+            <td style="padding: 24px 40px; text-align: center;">
+              <p style="margin: 0; color: #6b7280; font-size: 11px;">
+                Need help? Contact your administrator.
+              </p>
+            </td>
+          </tr>
         </table>
       </td>
     </tr>

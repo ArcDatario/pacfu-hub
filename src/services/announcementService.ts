@@ -28,6 +28,8 @@ const convertDoc = (doc: any): Announcement => {
     authorId: data.authorId || '',
     category: data.category || 'general',
     isPinned: data.isPinned || false,
+    audience: data.audience || 'all',
+    department: data.department || undefined,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
   };
@@ -59,6 +61,8 @@ export const createAnnouncement = async (
     content: data.content,
     category: data.category,
     isPinned: data.isPinned,
+    audience: data.audience,
+    department: data.department || null,
     author: authorName,
     authorId: authorId,
     createdAt: serverTimestamp(),
@@ -84,6 +88,8 @@ export const updateAnnouncement = async (
   if (data.content !== undefined) updateData.content = data.content;
   if (data.category !== undefined) updateData.category = data.category;
   if (data.isPinned !== undefined) updateData.isPinned = data.isPinned;
+  if (data.audience !== undefined) updateData.audience = data.audience;
+  if (data.department !== undefined) updateData.department = data.department;
 
   await updateDoc(docRef, updateData);
 };
@@ -102,21 +108,32 @@ export const toggleAnnouncementPin = async (id: string, isPinned: boolean): Prom
   });
 };
 
-// Get all faculty emails for notifications
-export const getFacultyEmails = async (): Promise<{ email: string; name: string }[]> => {
-  console.log('Querying Firestore for faculty users...');
-  const q = query(
-    collection(db, 'users'),
-    where('role', '==', 'faculty'),
-    where('isActive', '==', true)
-  );
+// Get all faculty emails for notifications (optionally filter by department)
+export const getFacultyEmails = async (department?: string): Promise<{ email: string; name: string }[]> => {
+  console.log('Querying Firestore for faculty users...', department ? `Department: ${department}` : 'All departments');
+  
+  let q;
+  if (department) {
+    q = query(
+      collection(db, 'users'),
+      where('role', '==', 'faculty'),
+      where('isActive', '==', true),
+      where('department', '==', department)
+    );
+  } else {
+    q = query(
+      collection(db, 'users'),
+      where('role', '==', 'faculty'),
+      where('isActive', '==', true)
+    );
+  }
   
   const snapshot = await getDocs(q);
   console.log('Found', snapshot.docs.length, 'faculty members');
   
-  const emails = snapshot.docs.map(doc => {
-    const data = doc.data();
-    console.log('Faculty member:', { email: data.email, name: data.name, role: data.role });
+  const emails = snapshot.docs.map(docSnapshot => {
+    const data = docSnapshot.data() as { email: string; name: string; role: string; department?: string };
+    console.log('Faculty member:', { email: data.email, name: data.name, role: data.role, department: data.department });
     return {
       email: data.email,
       name: data.name,
@@ -124,6 +141,27 @@ export const getFacultyEmails = async (): Promise<{ email: string; name: string 
   });
   
   return emails;
+};
+
+// Get unique departments from faculty
+export const getDepartments = async (): Promise<string[]> => {
+  const q = query(
+    collection(db, 'users'),
+    where('role', '==', 'faculty'),
+    where('isActive', '==', true)
+  );
+  
+  const snapshot = await getDocs(q);
+  const departments = new Set<string>();
+  
+  snapshot.docs.forEach(doc => {
+    const data = doc.data();
+    if (data.department) {
+      departments.add(data.department);
+    }
+  });
+  
+  return Array.from(departments).sort();
 };
 
 // Send announcement notification emails

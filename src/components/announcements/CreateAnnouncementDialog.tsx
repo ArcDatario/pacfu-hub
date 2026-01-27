@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,9 +23,9 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { createAnnouncement, getFacultyEmails, sendAnnouncementNotification } from '@/services/announcementService';
+import { createAnnouncement, getFacultyEmails, sendAnnouncementNotification, getDepartments } from '@/services/announcementService';
 import { logAnnouncementAction } from '@/services/logService';
-import { AnnouncementCategory } from '@/types/announcement';
+import { AnnouncementCategory, AnnouncementAudience } from '@/types/announcement';
 import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
@@ -34,6 +34,8 @@ const formSchema = z.object({
   category: z.enum(['general', 'urgent', 'event', 'memo']),
   isPinned: z.boolean(),
   sendNotification: z.boolean(),
+  audience: z.enum(['all', 'department']),
+  department: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -47,6 +49,7 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [departments, setDepartments] = useState<string[]>([]);
 
   const {
     register,
@@ -63,15 +66,42 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       category: 'general',
       isPinned: false,
       sendNotification: true,
+      audience: 'all',
+      department: '',
     },
   });
 
   const category = watch('category');
   const isPinned = watch('isPinned');
   const sendNotification = watch('sendNotification');
+  const audience = watch('audience');
+  const selectedDepartment = watch('department');
+
+  // Fetch departments on mount
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const depts = await getDepartments();
+        setDepartments(depts);
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   const onSubmit = async (data: FormData) => {
     if (!user) return;
+
+    // Validate department is selected when audience is 'department'
+    if (data.audience === 'department' && !data.department) {
+      toast({
+        title: 'Department required',
+        description: 'Please select a department for department-specific announcements.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -82,6 +112,8 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
           content: data.content,
           category: data.category as AnnouncementCategory,
           isPinned: data.isPinned,
+          audience: data.audience as AnnouncementAudience,
+          department: data.audience === 'department' ? data.department : undefined,
         },
         user.id,
         user.name
@@ -91,7 +123,10 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       if (data.sendNotification) {
         try {
           console.log('Fetching faculty emails...');
-          const facultyList = await getFacultyEmails();
+          // Get faculty emails - filter by department if applicable
+          const facultyList = await getFacultyEmails(
+            data.audience === 'department' ? data.department : undefined
+          );
           
           console.log('Faculty list:', facultyList);
           
@@ -140,6 +175,8 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       await logAnnouncementAction('created', data.title, user.id, user.name, {
         category: data.category,
         isPinned: data.isPinned,
+        audience: data.audience,
+        department: data.department,
       });
 
       toast({
@@ -217,18 +254,56 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
               </Select>
             </div>
 
-            <div className="space-y-4 pt-6">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="isPinned"
-                  checked={isPinned}
-                  onCheckedChange={(checked) => setValue('isPinned', checked === true)}
-                />
-                <Label htmlFor="isPinned" className="font-normal">
-                  Pin this announcement
-                </Label>
-              </div>
+            <div className="space-y-2">
+              <Label>Audience</Label>
+              <Select
+                value={audience}
+                onValueChange={(value) => setValue('audience', value as any)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select audience" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Faculty</SelectItem>
+                  <SelectItem value="department">Specific Department</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+
+          {audience === 'department' && (
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select
+                value={selectedDepartment}
+                onValueChange={(value) => setValue('department', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      {dept}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {departments.length === 0 && (
+                <p className="text-sm text-muted-foreground">No departments found</p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="isPinned"
+              checked={isPinned}
+              onCheckedChange={(checked) => setValue('isPinned', checked === true)}
+            />
+            <Label htmlFor="isPinned" className="font-normal">
+              Pin this announcement
+            </Label>
           </div>
 
           <div className="flex items-center space-x-2 pt-2 border-t">
@@ -238,7 +313,9 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
               onCheckedChange={(checked) => setValue('sendNotification', checked === true)}
             />
             <Label htmlFor="sendNotification" className="font-normal">
-              Notify all faculty members (email & push notification)
+              {audience === 'department' && selectedDepartment 
+                ? `Notify ${selectedDepartment} faculty (email)`
+                : 'Notify all faculty members (email)'}
             </Label>
           </div>
 
