@@ -17,6 +17,7 @@ import Faculty from "./pages/Faculty";
 import Messages from "./pages/Messages";
 import Finance from "./pages/Finance";
 import Logs from "./pages/Logs";
+import SharedFile from "./pages/SharedFile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/faculty" element={<Faculty />} />
               <Route path="/finance" element={<Finance />} />
               <Route path="/logs" element={<Logs />} />
+              <Route path="/share/:token" element={<SharedFile />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

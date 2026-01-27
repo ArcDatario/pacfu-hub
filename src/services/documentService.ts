@@ -237,3 +237,168 @@ export const moveDocument = async (docId: string, newParentId: string | null): P
     updatedAt: Timestamp.now(),
   });
 };
+
+// Share link collection
+const SHARE_LINKS_COLLECTION = 'shareLinks';
+
+export interface ShareLink {
+  id: string;
+  documentId: string;
+  url: string;
+  token: string;
+  isFolder: boolean;
+  createdAt: Date;
+  expiresAt: Date | null;
+}
+
+// Generate a share link for a document or folder
+export const generateShareLink = async (
+  documentId: string,
+  isFolder: boolean = false
+): Promise<ShareLink> => {
+  // Generate a unique token
+  const token = crypto.randomUUID();
+  const baseUrl = window.location.origin;
+  const url = `${baseUrl}/share/${token}`;
+  
+  const now = Timestamp.now();
+  // Set expiry to 30 days from now
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+  
+  const docRef = await addDoc(collection(db, SHARE_LINKS_COLLECTION), {
+    documentId,
+    token,
+    url,
+    isFolder,
+    createdAt: now,
+    expiresAt: Timestamp.fromDate(expiresAt),
+  });
+
+  return {
+    id: docRef.id,
+    documentId,
+    url,
+    token,
+    isFolder,
+    createdAt: now.toDate(),
+    expiresAt,
+  };
+};
+
+// Get existing share link for a document
+export const getShareLink = async (documentId: string): Promise<ShareLink | null> => {
+  const q = query(
+    collection(db, SHARE_LINKS_COLLECTION),
+    where('documentId', '==', documentId)
+  );
+  
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  
+  const docData = snapshot.docs[0].data();
+  const expiresAt = docData.expiresAt?.toDate();
+  
+  // Check if expired
+  if (expiresAt && expiresAt < new Date()) {
+    // Delete expired link
+    await deleteDoc(doc(db, SHARE_LINKS_COLLECTION, snapshot.docs[0].id));
+    return null;
+  }
+  
+  return {
+    id: snapshot.docs[0].id,
+    documentId: docData.documentId,
+    url: docData.url,
+    token: docData.token,
+    isFolder: docData.isFolder,
+    createdAt: docData.createdAt?.toDate() || new Date(),
+    expiresAt: expiresAt || null,
+  };
+};
+
+// Get share link by token (for public access)
+export const getShareLinkByToken = async (token: string): Promise<ShareLink | null> => {
+  const q = query(
+    collection(db, SHARE_LINKS_COLLECTION),
+    where('token', '==', token)
+  );
+  
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  
+  const docData = snapshot.docs[0].data();
+  const expiresAt = docData.expiresAt?.toDate();
+  
+  // Check if expired
+  if (expiresAt && expiresAt < new Date()) {
+    return null;
+  }
+  
+  return {
+    id: snapshot.docs[0].id,
+    documentId: docData.documentId,
+    url: docData.url,
+    token: docData.token,
+    isFolder: docData.isFolder,
+    createdAt: docData.createdAt?.toDate() || new Date(),
+    expiresAt: expiresAt || null,
+  };
+};
+
+// Get all files in a folder recursively (for ZIP download)
+export const getAllFilesInFolder = async (folderId: string): Promise<Document[]> => {
+  const files: Document[] = [];
+  
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    where('parentId', '==', folderId)
+  );
+  
+  const snapshot = await getDocs(q);
+  
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
+    const document: Document = {
+      id: docSnap.id,
+      name: data.name,
+      type: data.type,
+      size: data.size,
+      sizeFormatted: data.sizeFormatted,
+      mimeType: data.mimeType,
+      downloadUrl: data.downloadUrl,
+      storagePath: data.storagePath,
+      parentId: data.parentId,
+      createdBy: data.createdBy,
+      createdByName: data.createdByName,
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
+      shared: data.shared || false,
+      sharedWith: data.sharedWith || [],
+    };
+    
+    if (document.type === 'folder') {
+      // Recursively get files from subfolders
+      const subFiles = await getAllFilesInFolder(document.id);
+      files.push(...subFiles);
+    } else {
+      files.push(document);
+    }
+  }
+  
+  return files;
+};
+
+// Maximum file size (5MB)
+export const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+// Validate file size
+export const validateFileSize = (file: File): { valid: boolean; message?: string } => {
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      valid: false,
+      message: `File "${file.name}" exceeds the maximum size of 5MB (${(file.size / 1024 / 1024).toFixed(2)}MB)`,
+    };
+  }
+  return { valid: true };
+};
