@@ -24,17 +24,13 @@ interface EditProfileDialogProps {
 export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps) {
   const { user, refreshUser } = useAuth();
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [avatar, setAvatar] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = user?.role === 'admin';
-
   useEffect(() => {
     if (user && open) {
       setName(user.name);
-      setEmail(user.email);
       setAvatar(user.avatar);
     }
   }, [user, open]);
@@ -72,16 +68,10 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
       return;
     }
 
-    if (isAdmin && !email.trim()) {
-      toast.error('Please enter your email');
-      return;
-    }
-
     const hasNameChange = name !== user.name;
     const hasAvatarChange = avatar !== user.avatar;
-    const hasEmailChange = isAdmin && email !== user.email;
 
-    if (!hasNameChange && !hasAvatarChange && !hasEmailChange) {
+    if (!hasNameChange && !hasAvatarChange) {
       toast.info('No changes to save');
       onOpenChange(false);
       return;
@@ -99,9 +89,6 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
       }
       if (hasAvatarChange) {
         updateData.avatar = avatar || null;
-      }
-      if (hasEmailChange) {
-        updateData.email = email.trim();
       }
 
       await updateDoc(userRef, updateData);
@@ -138,9 +125,6 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
       await refreshUser();
 
       toast.success('Profile updated successfully');
-      if (hasEmailChange) {
-        toast.info('Note: Login email in authentication system may need to be updated separately.');
-      }
       onOpenChange(false);
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -153,7 +137,6 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
   const handleClose = () => {
     if (user) {
       setName(user.name);
-      setEmail(user.email);
       setAvatar(user.avatar);
     }
     onOpenChange(false);
@@ -220,28 +203,15 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
 
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            {isAdmin ? (
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                disabled={loading}
-              />
-            ) : (
-              <>
-                <Input
-                  id="email"
-                  value={user?.email || ''}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Email cannot be changed
-                </p>
-              </>
-            )}
+            <Input
+              id="email"
+              value={user?.email || ''}
+              disabled
+              className="bg-muted"
+            />
+            <p className="text-xs text-muted-foreground">
+              Email cannot be changed
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -92,43 +92,24 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
     setLoading(true);
 
     try {
-      // Check if email has changed
-      const emailChanged = formData.email !== faculty.email;
-      
-      const updateData: {
-        name: string;
-        department: string;
-        position: string;
-        groups: string[];
-        email?: string;
-      } = {
+      const updateData = {
         name: formData.name,
         department: formData.department,
         position: formData.position,
         groups: formData.groups,
       };
 
-      // Include email in update if changed
-      if (emailChanged) {
-        updateData.email = formData.email;
-      }
-
       const success = await updateFacultyDetails(faculty.id, updateData, faculty);
       
       if (success) {
         // Log the action
         if (user) {
-          const updatedFields = Object.keys(updateData);
           await logFacultyAction('updated', faculty.name, user.id, user.name, {
-            updatedFields,
-            emailChanged,
+            updatedFields: Object.keys(updateData),
           });
         }
         
         toast.success('Faculty details updated successfully');
-        if (emailChanged) {
-          toast.info('Note: Login email in authentication system may need to be updated separately.');
-        }
         onOpenChange(false);
       } else {
         toast.error('Failed to update faculty details');
@@ -187,6 +168,8 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
                 value={formData.email}
                 onChange={handleChange}
                 required
+                disabled
+                className="bg-muted"
               />
             </div>
           </div>
