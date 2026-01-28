@@ -1,5 +1,5 @@
 export type AnnouncementCategory = 'general' | 'urgent' | 'event' | 'memo';
-export type AnnouncementAudience = 'all' | 'department';
+export type AnnouncementAudience = 'all' | 'departments';
 
 export interface Announcement {
   id: string;
@@ -10,7 +10,7 @@ export interface Announcement {
   category: AnnouncementCategory;
   isPinned: boolean;
   audience: AnnouncementAudience;
-  department?: string;
+  departments?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,5 +21,5 @@ export interface CreateAnnouncementData {
   category: AnnouncementCategory;
   isPinned: boolean;
   audience: AnnouncementAudience;
-  department?: string;
+  departments?: string[];
 }
