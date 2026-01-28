@@ -68,9 +68,15 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest["announcement"
 
   // SECURITY: Escape all user-provided content to prevent XSS
   const safeTitle = escapeHtml(announcement.title);
-  const safeContent = escapeHtml(announcement.content);
+  const safeContent = escapeHtml(announcement.content).replace(/\n/g, '<br>');
   const safeName = escapeHtml(recipientName);
   const safeAuthor = escapeHtml(announcement.author);
+  const formattedDate = new Date().toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 
   return `
 <!DOCTYPE html>
@@ -80,78 +86,84 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest["announcement"
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${safeTitle}</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0fdf9;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background: linear-gradient(180deg, #f0fdf9 0%, #e6fcf2 100%);">
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0fdf4; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background-color: #f0fdf4;">
     <tr>
-      <td align="center" style="padding: 30px 20px;">
-        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width: 560px; width: 100%; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 30px rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.1);">
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%;">
           
-          <!-- Compact Header -->
+          <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 30px 32px; text-align: center;">
-              <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px;">
-                <div style="background: rgba(255,255,255,0.2); padding: 10px 14px; border-radius: 12px;">
-                  <span style="font-size: 20px;">📢</span>
-                </div>
-                <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.3px;">
-                  PACFU Portal Announcement
-                </h1>
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Content Area -->
-          <tr>
-            <td style="padding: 32px;">
-              
-              <!-- Category & Greeting -->
+            <td style="background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%); padding: 40px 48px; border-radius: 16px 16px 0 0;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
-                  <td style="padding-bottom: 20px;">
-                    <span style="display: inline-block; background: linear-gradient(135deg, ${categoryColor}15 0%, ${categoryColor}08 100%); border: 1px solid ${categoryColor}25; color: ${categoryColor}; font-size: 10px; font-weight: 700; padding: 6px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.8px;">
-                      ${categoryLabel}
+                  <td>
+                    <span style="display: inline-block; background: rgba(255,255,255,0.2); padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">
+                      📢 New Announcement
                     </span>
-                    <p style="margin: 16px 0 0 0; color: #374151; font-size: 15px; line-height: 1.5;">
-                      Hello <strong style="color: #059669;">${safeName}</strong>, a new announcement has been posted.
+                    <h1 style="margin: 16px 0 0 0; color: #ffffff; font-size: 28px; font-weight: 700; line-height: 1.3; letter-spacing: -0.5px;">
+                      PACFU Portal
+                    </h1>
+                    <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 400;">
+                      Pampanga State Agricultural University
                     </p>
                   </td>
                 </tr>
               </table>
+            </td>
+          </tr>
+          
+          <!-- Main Content -->
+          <tr>
+            <td style="background-color: #ffffff; padding: 48px;">
               
-              <!-- Announcement Card -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px;">
+              <!-- Category Badge & Date -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 32px;">
                 <tr>
-                  <td style="background: #f9fafb; border-radius: 12px; border-left: 4px solid #10b981; padding: 24px;">
-                    <h2 style="margin: 0 0 12px 0; color: #065f46; font-size: 20px; font-weight: 700; line-height: 1.4;">
-                      ${safeTitle}
-                    </h2>
-                    <div style="width: 40px; height: 2px; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 1px; margin-bottom: 16px;"></div>
-                    <div style="color: #4b5563; font-size: 14px; line-height: 1.7; max-height: 200px; overflow-y: auto; padding-right: 8px;">
-                      ${safeContent}
-                    </div>
+                  <td>
+                    <span style="display: inline-block; background: ${categoryColor}12; border: 1px solid ${categoryColor}30; color: ${categoryColor}; font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.8px;">
+                      ${categoryLabel}
+                    </span>
+                    <span style="display: inline-block; margin-left: 12px; color: #6b7280; font-size: 13px;">
+                      ${formattedDate}
+                    </span>
                   </td>
                 </tr>
               </table>
               
-              <!-- Author & Button Row -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td style="padding-bottom: 24px;">
-                    <div style="display: inline-block; background: #f3f4f6; padding: 8px 16px; border-radius: 20px;">
-                      <span style="color: #6b7280; font-size: 12px;">
-                        ✍️ Posted by <strong style="color: #059669;">${safeAuthor}</strong>
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              </table>
+              <!-- Greeting -->
+              <p style="margin: 0 0 24px 0; color: #374151; font-size: 16px; line-height: 1.6;">
+                Dear <strong style="color: #059669;">${safeName}</strong>,
+              </p>
+              
+              <p style="margin: 0 0 32px 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
+                A new announcement has been posted to the PACFU Portal. Please review the details below.
+              </p>
+              
+              <!-- Divider -->
+              <div style="width: 100%; height: 1px; background: linear-gradient(90deg, #10b981 0%, #d1fae5 100%); margin-bottom: 32px;"></div>
+              
+              <!-- Title -->
+              <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 22px; font-weight: 700; line-height: 1.4;">
+                ${safeTitle}
+              </h2>
+              
+              <!-- Content -->
+              <div style="color: #374151; font-size: 15px; line-height: 1.8; margin-bottom: 32px;">
+                ${safeContent}
+              </div>
+              
+              <!-- Author -->
+              <p style="margin: 0 0 40px 0; color: #6b7280; font-size: 14px; font-style: italic;">
+                — ${safeAuthor}
+              </p>
               
               <!-- CTA Button -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="center">
-                    <a href="https://psau-portal.lovable.app/announcements" style="display: inline-block; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 14px 36px; border-radius: 25px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); transition: all 0.2s ease; letter-spacing: 0.3px;">
-                      🔗 View Full Announcement
+                    <a href="https://psau-portal.lovable.app/announcements" style="display: inline-block; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 16px 40px; border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); letter-spacing: 0.3px;">
+                      View Full Announcement →
                     </a>
                   </td>
                 </tr>
@@ -162,24 +174,20 @@ const generateEmailHtml = (announcement: AnnouncementEmailRequest["announcement"
           
           <!-- Footer -->
           <tr>
-            <td style="background: linear-gradient(180deg, #f8fdfb 0%, #f0faf6 100%); padding: 24px 32px; border-top: 1px solid #e5e7eb;">
+            <td style="background-color: #065f46; padding: 32px 48px; border-radius: 0 0 16px 16px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="center">
-                    <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px;">
-                      🔔 Automated notification from PACFU Portal
+                    <p style="margin: 0 0 8px 0; color: rgba(255,255,255,0.9); font-size: 13px; font-weight: 500;">
+                      PACFU Portal — Faculty Communication Hub
                     </p>
-                    <p style="margin: 0 0 16px 0; color: #9ca3af; font-size: 11px; max-width: 400px; line-height: 1.5;">
-                      You received this email as a faculty member of Pampanga State Agricultural University.
+                    <p style="margin: 0 0 16px 0; color: rgba(255,255,255,0.6); font-size: 12px; line-height: 1.5;">
+                      This is an automated notification. Please do not reply to this email.
                     </p>
-                    <div style="padding-top: 16px; border-top: 1px solid #e5e7eb;">
-                      <p style="margin: 0; color: #10b981; font-size: 11px; font-weight: 600;">
-                        © ${currentYear} PACFU - Pampanga State Agricultural University
-                      </p>
-                      <p style="margin: 8px 0 0 0; color: #9ca3af; font-size: 10px;">
-                        Need assistance? Contact your administrator.
-                      </p>
-                    </div>
+                    <div style="width: 40px; height: 2px; background: rgba(255,255,255,0.3); margin: 0 auto 16px auto;"></div>
+                    <p style="margin: 0; color: rgba(255,255,255,0.5); font-size: 11px;">
+                      © ${currentYear} Pampanga State Agricultural University. All rights reserved.
+                    </p>
                   </td>
                 </tr>
               </table>
