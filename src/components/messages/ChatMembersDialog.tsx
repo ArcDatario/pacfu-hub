@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { Search, Crown, User } from 'lucide-react';
+import { Search, User } from 'lucide-react';
 import { Chat } from '@/types/chat';
 
 interface ChatMembersDialogProps {
@@ -89,12 +89,6 @@ export function ChatMembersDialog({
                         </Badge>
                       )}
                     </div>
-                    {member.isCreator && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Crown className="h-3 w-3 text-amber-500" />
-                        <span>Creator</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}

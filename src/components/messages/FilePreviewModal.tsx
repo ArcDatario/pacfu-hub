@@ -53,7 +53,7 @@ export function FilePreviewModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden [&>button]:hidden">
         <DialogHeader className="p-4 border-b flex flex-row items-center justify-between">
           <DialogTitle className="truncate max-w-[60%]">{file.fileName}</DialogTitle>
           <div className="flex items-center gap-2">
