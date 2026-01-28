@@ -120,6 +120,11 @@ export default function Elections() {
     return e.status === 'ended';
   });
 
+  // Count elections by status for badges
+  const activeCount = electionsWithVotes.filter((e) => e.status === 'active').length;
+  const upcomingCount = electionsWithVotes.filter((e) => e.status === 'upcoming').length;
+  const endedCount = electionsWithVotes.filter((e) => e.status === 'ended').length;
+
   const handleVoteSuccess = async () => {
     if (votingElection && user) {
       // Refresh election data
@@ -178,9 +183,30 @@ export default function Elections() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           <TabsList>
-            <TabsTrigger value="active">Active Elections</TabsTrigger>
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="ended">History</TabsTrigger>
+            <TabsTrigger value="active" className="gap-2">
+              Active Elections
+              {activeCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs">
+                  {activeCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="upcoming" className="gap-2">
+              Upcoming
+              {upcomingCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs">
+                  {upcomingCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="ended" className="gap-2">
+              History
+              {endedCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs">
+                  {endedCount}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value={activeTab} className="space-y-6 mt-6">
