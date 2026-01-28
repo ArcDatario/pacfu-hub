@@ -11,7 +11,9 @@ import {
   arrayUnion,
   arrayRemove
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { db, firebaseConfig } from '@/lib/firebase';
 import { FacultyMember } from '@/types/faculty';
 
 // Get all faculty members from Firestore
@@ -108,10 +110,39 @@ export const toggleFacultyActive = async (userId: string, currentStatus: boolean
 export const updateFacultyDetails = async (
   userId: string, 
   data: Partial<{ name: string; email: string; department: string; position: string; groups: string[] }>,
-  oldFacultyData?: FacultyMember
+  oldFacultyData?: FacultyMember,
+  emailCredentials?: { newEmail: string; newPassword: string }
 ): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
+    
+    // If email is being changed with credentials, create new auth account
+    if (emailCredentials && data.email) {
+      try {
+        // Create a secondary Firebase app instance to create the new auth account
+        const secondaryApp = initializeApp(firebaseConfig, 'email-update-' + Date.now());
+        const secondaryAuth = getAuth(secondaryApp);
+        
+        // Create new auth account with new email
+        await createUserWithEmailAndPassword(
+          secondaryAuth, 
+          emailCredentials.newEmail, 
+          emailCredentials.newPassword
+        );
+        
+        // Sign out from secondary auth and delete the secondary app
+        await signOut(secondaryAuth);
+        await deleteApp(secondaryApp);
+        
+        console.log('New auth account created for email:', emailCredentials.newEmail);
+      } catch (authError: any) {
+        console.error('Error creating new auth account:', authError);
+        if (authError.code === 'auth/email-already-in-use') {
+          throw new Error('An account with this email already exists');
+        }
+        throw authError;
+      }
+    }
     
     // If groups are being updated, update chat participants
     if (data.groups && oldFacultyData) {
