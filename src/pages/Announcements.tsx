@@ -56,10 +56,10 @@ export default function Announcements() {
     const matchesSearch = a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       a.content.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // Department filter - admins see all, faculty only sees 'all' or their department in the list
+    // Department filter - admins see all, faculty only sees 'all' or their department
     const matchesDepartment = isAdmin || 
       a.audience === 'all' || 
-      (a.audience === 'departments' && a.departments?.includes(userDepartment || ''));
+      (a.audience === 'department' && a.department === userDepartment);
     
     return matchesSearch && matchesDepartment;
   });
@@ -215,15 +215,11 @@ function AnnouncementCard({ announcement, isAdmin, onEdit, onDelete, onTogglePin
             {announcement.isPinned && (
               <Pin className="h-3.5 w-3.5 text-accent" />
             )}
-            {announcement.audience === 'departments' && announcement.departments && announcement.departments.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {announcement.departments.map((dept) => (
-                  <Badge key={dept} variant="outline" className="text-xs gap-1">
-                    <Building2 className="h-3 w-3" />
-                    {dept}
-                  </Badge>
-                ))}
-              </div>
+            {announcement.audience === 'department' && announcement.department && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <Building2 className="h-3 w-3" />
+                {announcement.department}
+              </Badge>
             )}
           </div>
           

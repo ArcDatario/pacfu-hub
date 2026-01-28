@@ -20,14 +20,6 @@ const COLLECTION_NAME = 'announcements';
 // Convert Firestore document to Announcement
 const convertDoc = (doc: any): Announcement => {
   const data = doc.data();
-  // Handle migration from old 'department' field to new 'departments' array
-  let departments: string[] | undefined;
-  if (data.departments && Array.isArray(data.departments)) {
-    departments = data.departments;
-  } else if (data.department) {
-    departments = [data.department];
-  }
-  
   return {
     id: doc.id,
     title: data.title || '',
@@ -36,8 +28,8 @@ const convertDoc = (doc: any): Announcement => {
     authorId: data.authorId || '',
     category: data.category || 'general',
     isPinned: data.isPinned || false,
-    audience: data.audience === 'department' ? 'departments' : (data.audience || 'all'),
-    departments,
+    audience: data.audience || 'all',
+    department: data.department || undefined,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(),
   };
@@ -70,7 +62,7 @@ export const createAnnouncement = async (
     category: data.category,
     isPinned: data.isPinned,
     audience: data.audience,
-    departments: data.departments || null,
+    department: data.department || null,
     author: authorName,
     authorId: authorId,
     createdAt: serverTimestamp(),
@@ -97,7 +89,7 @@ export const updateAnnouncement = async (
   if (data.category !== undefined) updateData.category = data.category;
   if (data.isPinned !== undefined) updateData.isPinned = data.isPinned;
   if (data.audience !== undefined) updateData.audience = data.audience;
-  if (data.departments !== undefined) updateData.departments = data.departments;
+  if (data.department !== undefined) updateData.department = data.department;
 
   await updateDoc(docRef, updateData);
 };
@@ -116,65 +108,39 @@ export const toggleAnnouncementPin = async (id: string, isPinned: boolean): Prom
   });
 };
 
-// Get all faculty emails for notifications (optionally filter by departments)
-export const getFacultyEmails = async (departments?: string[]): Promise<{ email: string; name: string }[]> => {
-  console.log('Querying Firestore for faculty users...', departments?.length ? `Departments: ${departments.join(', ')}` : 'All departments');
+// Get all faculty emails for notifications (optionally filter by department)
+export const getFacultyEmails = async (department?: string): Promise<{ email: string; name: string }[]> => {
+  console.log('Querying Firestore for faculty users...', department ? `Department: ${department}` : 'All departments');
   
-  // Firestore doesn't support 'in' query with more than 30 values, so we need to handle this
-  if (departments && departments.length > 0) {
-    // For multiple departments, we need to fetch all active faculty and filter client-side
-    // or use 'in' query if departments <= 30
-    if (departments.length <= 30) {
-      const q = query(
-        collection(db, 'users'),
-        where('role', '==', 'faculty'),
-        where('isActive', '==', true),
-        where('department', 'in', departments)
-      );
-      
-      const snapshot = await getDocs(q);
-      console.log('Found', snapshot.docs.length, 'faculty members in selected departments');
-      
-      return snapshot.docs.map(docSnapshot => {
-        const data = docSnapshot.data() as { email: string; name: string; role: string; department?: string };
-        console.log('Faculty member:', { email: data.email, name: data.name, department: data.department });
-        return { email: data.email, name: data.name };
-      });
-    } else {
-      // Fallback for more than 30 departments - fetch all and filter
-      const q = query(
-        collection(db, 'users'),
-        where('role', '==', 'faculty'),
-        where('isActive', '==', true)
-      );
-      
-      const snapshot = await getDocs(q);
-      const filtered = snapshot.docs
-        .map(docSnapshot => {
-          const data = docSnapshot.data() as { email: string; name: string; role: string; department?: string };
-          return { ...data };
-        })
-        .filter(user => user.department && departments.includes(user.department));
-      
-      console.log('Found', filtered.length, 'faculty members in selected departments');
-      return filtered.map(user => ({ email: user.email, name: user.name }));
-    }
+  let q;
+  if (department) {
+    q = query(
+      collection(db, 'users'),
+      where('role', '==', 'faculty'),
+      where('isActive', '==', true),
+      where('department', '==', department)
+    );
   } else {
-    const q = query(
+    q = query(
       collection(db, 'users'),
       where('role', '==', 'faculty'),
       where('isActive', '==', true)
     );
-    
-    const snapshot = await getDocs(q);
-    console.log('Found', snapshot.docs.length, 'faculty members');
-    
-    return snapshot.docs.map(docSnapshot => {
-      const data = docSnapshot.data() as { email: string; name: string; role: string; department?: string };
-      console.log('Faculty member:', { email: data.email, name: data.name, department: data.department });
-      return { email: data.email, name: data.name };
-    });
   }
+  
+  const snapshot = await getDocs(q);
+  console.log('Found', snapshot.docs.length, 'faculty members');
+  
+  const emails = snapshot.docs.map(docSnapshot => {
+    const data = docSnapshot.data() as { email: string; name: string; role: string; department?: string };
+    console.log('Faculty member:', { email: data.email, name: data.name, role: data.role, department: data.department });
+    return {
+      email: data.email,
+      name: data.name,
+    };
+  });
+  
+  return emails;
 };
 
 // Get unique departments from faculty

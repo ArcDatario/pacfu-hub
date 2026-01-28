@@ -28,9 +28,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      {/* Add pt-16 for mobile header and lg:pt-0 for desktop */}
-      <main className="pt-16 lg:pl-64 lg:pt-0">
-        <div className="container py-4 px-4 sm:py-6 sm:px-6">
+      <main className="pl-64">
+        <div className="container py-6">
           {children}
         </div>
       </main>

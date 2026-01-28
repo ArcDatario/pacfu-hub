@@ -26,8 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createAnnouncement, getFacultyEmails, sendAnnouncementNotification, getDepartments } from '@/services/announcementService';
 import { logAnnouncementAction } from '@/services/logService';
 import { AnnouncementCategory, AnnouncementAudience } from '@/types/announcement';
-import { Loader2, X } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
@@ -35,8 +34,8 @@ const formSchema = z.object({
   category: z.enum(['general', 'urgent', 'event', 'memo']),
   isPinned: z.boolean(),
   sendNotification: z.boolean(),
-  audience: z.enum(['all', 'departments']),
-  departments: z.array(z.string()).optional(),
+  audience: z.enum(['all', 'department']),
+  department: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -50,8 +49,7 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [availableDepartments, setAvailableDepartments] = useState<string[]>([]);
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
 
   const {
     register,
@@ -69,7 +67,7 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       isPinned: false,
       sendNotification: true,
       audience: 'all',
-      departments: [],
+      department: '',
     },
   });
 
@@ -77,13 +75,14 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
   const isPinned = watch('isPinned');
   const sendNotification = watch('sendNotification');
   const audience = watch('audience');
+  const selectedDepartment = watch('department');
 
   // Fetch departments on mount
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
         const depts = await getDepartments();
-        setAvailableDepartments(depts);
+        setDepartments(depts);
       } catch (error) {
         console.error('Error fetching departments:', error);
       }
@@ -91,40 +90,14 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
     fetchDepartments();
   }, []);
 
-  // Reset selected departments when audience changes
-  useEffect(() => {
-    if (audience === 'all') {
-      setSelectedDepartments([]);
-      setValue('departments', []);
-    }
-  }, [audience, setValue]);
-
-  const handleDepartmentToggle = (dept: string) => {
-    setSelectedDepartments(prev => {
-      const newSelection = prev.includes(dept)
-        ? prev.filter(d => d !== dept)
-        : [...prev, dept];
-      setValue('departments', newSelection);
-      return newSelection;
-    });
-  };
-
-  const removeDepartment = (dept: string) => {
-    setSelectedDepartments(prev => {
-      const newSelection = prev.filter(d => d !== dept);
-      setValue('departments', newSelection);
-      return newSelection;
-    });
-  };
-
   const onSubmit = async (data: FormData) => {
     if (!user) return;
 
-    // Validate departments are selected when audience is 'departments'
-    if (data.audience === 'departments' && selectedDepartments.length === 0) {
+    // Validate department is selected when audience is 'department'
+    if (data.audience === 'department' && !data.department) {
       toast({
-        title: 'Departments required',
-        description: 'Please select at least one department for department-specific announcements.',
+        title: 'Department required',
+        description: 'Please select a department for department-specific announcements.',
         variant: 'destructive',
       });
       return;
@@ -140,7 +113,7 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
           category: data.category as AnnouncementCategory,
           isPinned: data.isPinned,
           audience: data.audience as AnnouncementAudience,
-          departments: data.audience === 'departments' ? selectedDepartments : undefined,
+          department: data.audience === 'department' ? data.department : undefined,
         },
         user.id,
         user.name
@@ -150,9 +123,9 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       if (data.sendNotification) {
         try {
           console.log('Fetching faculty emails...');
-          // Get faculty emails - filter by departments if applicable
+          // Get faculty emails - filter by department if applicable
           const facultyList = await getFacultyEmails(
-            data.audience === 'departments' ? selectedDepartments : undefined
+            data.audience === 'department' ? data.department : undefined
           );
           
           console.log('Faculty list:', facultyList);
@@ -203,7 +176,7 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
         category: data.category,
         isPinned: data.isPinned,
         audience: data.audience,
-        departments: selectedDepartments,
+        department: data.department,
       });
 
       toast({
@@ -212,7 +185,6 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
       });
 
       reset();
-      setSelectedDepartments([]);
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error creating announcement:', error);
@@ -228,13 +200,12 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
 
   const handleClose = () => {
     reset();
-    setSelectedDepartments([]);
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Create New Announcement</DialogTitle>
         </DialogHeader>
@@ -294,58 +265,32 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Faculty</SelectItem>
-                  <SelectItem value="departments">Select Departments</SelectItem>
+                  <SelectItem value="department">Specific Department</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {audience === 'departments' && (
-            <div className="space-y-3">
-              <Label>Select Departments</Label>
-              
-              {/* Selected departments display */}
-              {selectedDepartments.length > 0 && (
-                <div className="flex flex-wrap gap-2 p-2 bg-muted rounded-md">
-                  {selectedDepartments.map((dept) => (
-                    <Badge key={dept} variant="secondary" className="gap-1">
+          {audience === 'department' && (
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select
+                value={selectedDepartment}
+                onValueChange={(value) => setValue('department', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
                       {dept}
-                      <button
-                        type="button"
-                        onClick={() => removeDepartment(dept)}
-                        className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
+                    </SelectItem>
                   ))}
-                </div>
-              )}
-              
-              {/* Department checkboxes */}
-              <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border rounded-md p-3">
-                {availableDepartments.length > 0 ? (
-                  availableDepartments.map((dept) => (
-                    <div key={dept} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`dept-${dept}`}
-                        checked={selectedDepartments.includes(dept)}
-                        onCheckedChange={() => handleDepartmentToggle(dept)}
-                      />
-                      <Label htmlFor={`dept-${dept}`} className="font-normal cursor-pointer">
-                        {dept}
-                      </Label>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">No departments found</p>
-                )}
-              </div>
-              
-              {selectedDepartments.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Select one or more departments
-                </p>
+                </SelectContent>
+              </Select>
+              {departments.length === 0 && (
+                <p className="text-sm text-muted-foreground">No departments found</p>
               )}
             </div>
           )}
@@ -368,8 +313,8 @@ export function CreateAnnouncementDialog({ open, onOpenChange }: CreateAnnouncem
               onCheckedChange={(checked) => setValue('sendNotification', checked === true)}
             />
             <Label htmlFor="sendNotification" className="font-normal">
-              {audience === 'departments' && selectedDepartments.length > 0
-                ? `Notify faculty in ${selectedDepartments.length} department${selectedDepartments.length > 1 ? 's' : ''} (email)`
+              {audience === 'department' && selectedDepartment 
+                ? `Notify ${selectedDepartment} faculty (email)`
                 : 'Notify all faculty members (email)'}
             </Label>
           </div>
