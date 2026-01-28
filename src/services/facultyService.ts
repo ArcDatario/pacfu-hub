@@ -107,7 +107,7 @@ export const toggleFacultyActive = async (userId: string, currentStatus: boolean
 // Update faculty details
 export const updateFacultyDetails = async (
   userId: string, 
-  data: Partial<{ name: string; department: string; position: string; groups: string[] }>,
+  data: Partial<{ name: string; email: string; department: string; position: string; groups: string[] }>,
   oldFacultyData?: FacultyMember
 ): Promise<boolean> => {
   try {
