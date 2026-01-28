@@ -1,3 +1,12 @@
+export interface MessageFileData {
+  fileName: string;
+  fileSize: number;
+  fileSizeFormatted: string;
+  mimeType: string;
+  storagePath: string;
+  downloadUrl: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -5,8 +14,9 @@ export interface Message {
   senderName: string;
   content: string;
   timestamp: Date;
-  type: 'text' | 'image' | 'file';
+  type: 'text' | 'image' | 'video' | 'file';
   readBy: string[];
+  file?: MessageFileData;
 }
 
 export interface Chat {

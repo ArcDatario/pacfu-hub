@@ -102,6 +102,7 @@ export const subscribeToMessages = (chatId: string, callback: (messages: Message
         type: data.type || 'text',
         timestamp: data.timestamp?.toDate() || new Date(),
         readBy: data.readBy || [],
+        file: data.file || undefined,
       } as Message;
     });
     callback(messages);
