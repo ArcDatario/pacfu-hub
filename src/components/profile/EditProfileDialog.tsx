@@ -13,8 +13,14 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Loader2, Camera, User } from 'lucide-react';
+import { db, auth } from '@/lib/firebase';
+import { Loader2, Camera, User, Eye, EyeOff } from 'lucide-react';
+import { 
+  reauthenticateWithCredential, 
+  EmailAuthProvider, 
+  updatePassword 
+} from 'firebase/auth';
+import { Separator } from '@/components/ui/separator';
 
 interface EditProfileDialogProps {
   open: boolean;
@@ -29,6 +35,15 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Password change fields
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
@@ -36,6 +51,10 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
       setName(user.name);
       setEmail(user.email);
       setAvatar(user.avatar);
+      // Reset password fields
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
     }
   }, [user, open]);
 
@@ -62,6 +81,64 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
       setAvatar(result);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handlePasswordChange = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error('Please fill in all password fields');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser || !currentUser.email) {
+      toast.error('No authenticated user found');
+      return;
+    }
+
+    setPasswordLoading(true);
+
+    try {
+      // Re-authenticate user with current password
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        currentPassword
+      );
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Update password
+      await updatePassword(currentUser, newPassword);
+
+      toast.success('Password updated successfully');
+      
+      // Reset password fields
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      console.error('Error updating password:', error);
+      
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        toast.error('Current password is incorrect');
+      } else if (error.code === 'auth/weak-password') {
+        toast.error('New password is too weak');
+      } else if (error.code === 'auth/requires-recent-login') {
+        toast.error('Please log out and log in again before changing your password');
+      } else {
+        toast.error('Failed to update password');
+      }
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -156,12 +233,15 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
       setEmail(user.email);
       setAvatar(user.avatar);
     }
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
           <DialogDescription>
@@ -275,6 +355,118 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
             </Button>
           </DialogFooter>
         </form>
+
+        <Separator className="my-4" />
+
+        {/* Password Change Section */}
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-medium">Change Password</h3>
+            <p className="text-xs text-muted-foreground">
+              Update your login password
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="currentPassword"
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  disabled={passwordLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  disabled={passwordLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  disabled={passwordLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={handlePasswordChange}
+              disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+            >
+              {passwordLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Updating Password...
+                </>
+              ) : (
+                'Update Password'
+              )}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
