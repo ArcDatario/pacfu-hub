@@ -8,6 +8,7 @@ export interface User {
   avatar?: string;
   isActive: boolean;
   department?: string;
+  groups?: string[];
   createdAt: Date;
 }
 

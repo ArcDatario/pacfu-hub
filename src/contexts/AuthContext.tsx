@@ -108,9 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: userData.email,
             name: userData.name,
             role: userData.role,
-            avatar: userData.avatar, // This is the key field
+            avatar: userData.avatar,
             isActive: userData.isActive,
             department: userData.department,
+            groups: userData.groups,
             createdAt: userData.createdAt,
           },
         }));

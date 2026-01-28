@@ -4,29 +4,43 @@ import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { UpcomingEvents } from '@/components/dashboard/UpcomingEvents';
 import { useAuth } from '@/contexts/AuthContext';
-import { Users, MessageSquare, FileText, Vote, Megaphone, DollarSign } from 'lucide-react';
+import { useDashboardData } from '@/hooks/useDashboardData';
+import { Users, MessageSquare, FileText, Vote, Megaphone, DollarSign, CheckSquare, FolderOpen } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { stats, recentActivity, upcomingEvents, loading } = useDashboardData();
   const isAdmin = user?.role === 'admin';
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   const adminStats = [
-    { title: 'Total Faculty', value: 124, icon: Users},
-    { title: 'Active Chats', value: 18, icon: MessageSquare },
-    { title: 'Announcements', value: 45, icon: Megaphone},
-    { title: 'Documents', value: 892, icon: FileText },
-    { title: 'Active Polls', value: 3, icon: Vote },
-    { title: 'Total Funds', value: '₱245,000', icon: DollarSign },
+    { title: 'Total Faculty', value: stats.totalFaculty, icon: Users },
+    { title: 'Active Chats', value: stats.activeChats, icon: MessageSquare },
+    { title: 'Announcements', value: stats.totalAnnouncements, icon: Megaphone },
+    { title: 'Documents', value: stats.totalDocuments, icon: FileText },
+    { title: 'Active Polls', value: stats.activePolls, icon: Vote },
+    { title: 'Active Elections', value: stats.activeElections, icon: CheckSquare },
+    { title: 'Total Funds', value: formatCurrency(stats.totalFunds), icon: DollarSign },
   ];
 
   const facultyStats = [
-    { title: 'My Groups', value: 5, icon: MessageSquare },
-    { title: 'Unread Messages', value: 12, icon: MessageSquare, description: 'Across all chats' },
-    { title: 'My Documents', value: 34, icon: FileText },
-    { title: 'Pending Polls', value: 2, icon: Vote, description: 'Awaiting your vote' },
+    { title: 'My Groups', value: stats.myGroups, icon: FolderOpen },
+    { title: 'Unread Messages', value: stats.unreadMessages, icon: MessageSquare, description: 'Across all chats' },
+    { title: 'Active Chats', value: stats.activeChats, icon: MessageSquare },
+    { title: 'Pending Polls', value: stats.pendingPolls, icon: Vote, description: 'Awaiting your vote' },
+    { title: 'Pending Elections', value: stats.pendingElections, icon: CheckSquare, description: 'Cast your vote' },
   ];
 
-  const stats = isAdmin ? adminStats : facultyStats;
+  const displayStats = isAdmin ? adminStats : facultyStats;
 
   return (
     <DashboardLayout>
@@ -43,22 +57,30 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {stats.map((stat, index) => (
-            <div 
-              key={stat.title} 
-              className="animate-fade-up"
-              style={{ animationDelay: `${index * 0.05}s` }}
-            >
-              <StatCard {...stat} />
-            </div>
-          ))}
+          {loading ? (
+            Array.from({ length: isAdmin ? 7 : 5 }).map((_, index) => (
+              <div key={index} className="animate-fade-up" style={{ animationDelay: `${index * 0.05}s` }}>
+                <Skeleton className="h-[120px] rounded-xl" />
+              </div>
+            ))
+          ) : (
+            displayStats.map((stat, index) => (
+              <div 
+                key={stat.title} 
+                className="animate-fade-up"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <StatCard {...stat} />
+              </div>
+            ))
+          )}
         </div>
 
         {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
             <div className="animate-fade-up" style={{ animationDelay: '0.2s' }}>
-              <RecentActivity />
+              <RecentActivity activities={recentActivity} loading={loading} />
             </div>
           </div>
           
@@ -67,7 +89,7 @@ export default function Dashboard() {
               <QuickActions />
             </div>
             <div className="animate-fade-up" style={{ animationDelay: '0.3s' }}>
-              <UpcomingEvents />
+              <UpcomingEvents events={upcomingEvents} loading={loading} />
             </div>
           </div>
         </div>
