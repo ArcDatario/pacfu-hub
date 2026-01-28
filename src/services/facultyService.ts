@@ -3,7 +3,9 @@ import {
   query, 
   where, 
   getDocs, 
+  getDoc,
   doc, 
+  setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
@@ -112,29 +114,93 @@ export const updateFacultyDetails = async (
   data: Partial<{ name: string; email: string; department: string; position: string; groups: string[] }>,
   oldFacultyData?: FacultyMember,
   emailCredentials?: { newEmail: string; newPassword: string }
-): Promise<boolean> => {
+): Promise<{ success: boolean; newUserId?: string }> => {
   try {
-    const userRef = doc(db, 'users', userId);
+    let newUserId: string | undefined;
     
-    // If email is being changed with credentials, create new auth account
-    if (emailCredentials && data.email) {
+    // If email is being changed with credentials, create new auth account and migrate data
+    if (emailCredentials && data.email && oldFacultyData) {
       try {
         // Create a secondary Firebase app instance to create the new auth account
         const secondaryApp = initializeApp(firebaseConfig, 'email-update-' + Date.now());
         const secondaryAuth = getAuth(secondaryApp);
         
         // Create new auth account with new email
-        await createUserWithEmailAndPassword(
+        const userCredential = await createUserWithEmailAndPassword(
           secondaryAuth, 
           emailCredentials.newEmail, 
           emailCredentials.newPassword
         );
         
+        newUserId = userCredential.user.uid;
+        
         // Sign out from secondary auth and delete the secondary app
         await signOut(secondaryAuth);
         await deleteApp(secondaryApp);
         
-        console.log('New auth account created for email:', emailCredentials.newEmail);
+        console.log('New auth account created for email:', emailCredentials.newEmail, 'with UID:', newUserId);
+        
+        // Get the old user document data
+        const oldUserRef = doc(db, 'users', userId);
+        const oldUserDoc = await getDoc(oldUserRef);
+        
+        if (oldUserDoc.exists()) {
+          const oldUserData = oldUserDoc.data();
+          
+          // Create new user document with the new UID
+          const newUserRef = doc(db, 'users', newUserId);
+          await setDoc(newUserRef, {
+            ...oldUserData,
+            email: emailCredentials.newEmail,
+            name: data.name || oldUserData.name,
+            department: data.department || oldUserData.department,
+            position: data.position || oldUserData.position,
+            groups: data.groups || oldUserData.groups || [],
+          });
+          
+          // Update all chat participants to use new UID
+          const chatsRef = collection(db, 'chats');
+          const chatsSnapshot = await getDocs(chatsRef);
+          
+          for (const chatDoc of chatsSnapshot.docs) {
+            const chatData = chatDoc.data();
+            
+            // Check if old user is a participant
+            if (chatData.participants && chatData.participants.includes(userId)) {
+              // Replace old UID with new UID in participants array
+              const newParticipants = chatData.participants.map((p: string) => 
+                p === userId ? newUserId : p
+              );
+              
+              // Update participant names and avatars
+              const newParticipantNames = { ...chatData.participantNames };
+              const newParticipantAvatars = { ...chatData.participantAvatars };
+              
+              if (newParticipantNames[userId]) {
+                newParticipantNames[newUserId] = data.name || newParticipantNames[userId];
+                delete newParticipantNames[userId];
+              }
+              
+              if (newParticipantAvatars && newParticipantAvatars[userId]) {
+                newParticipantAvatars[newUserId] = newParticipantAvatars[userId];
+                delete newParticipantAvatars[userId];
+              }
+              
+              await updateDoc(chatDoc.ref, {
+                participants: newParticipants,
+                participantNames: newParticipantNames,
+                participantAvatars: newParticipantAvatars,
+              });
+            }
+          }
+          
+          // Delete the old user document
+          await deleteDoc(oldUserRef);
+          
+          console.log('Successfully migrated user from', userId, 'to', newUserId);
+        }
+        
+        return { success: true, newUserId };
       } catch (authError: any) {
         console.error('Error creating new auth account:', authError);
         if (authError.code === 'auth/email-already-in-use') {
@@ -143,6 +209,9 @@ export const updateFacultyDetails = async (
         throw authError;
       }
     }
+    
+    // If no email change, just update the Firestore document
+    const userRef = doc(db, 'users', userId);
     
     // If groups are being updated, update chat participants
     if (data.groups && oldFacultyData) {
@@ -189,12 +258,15 @@ export const updateFacultyDetails = async (
       }
     }
     
-    // Update the user document with all provided fields
-    await updateDoc(userRef, data);
-    return true;
+    // Update the user document with all provided fields (excluding email for non-email changes)
+    const updateData = { ...data };
+    delete updateData.email; // Email is only updated when creating new auth account
+    await updateDoc(userRef, updateData);
+    
+    return { success: true };
   } catch (error) {
     console.error('Error updating faculty:', error);
-    return false;
+    return { success: false };
   }
 };
 

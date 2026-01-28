@@ -91,10 +91,10 @@ export function FacultyProvider({ children }: { children: ReactNode }) {
       if (data.groups !== undefined) updateData.groups = data.groups;
 
       // Update in Firebase, passing email credentials if provided
-      const success = await updateFacultyDetailsService(id, updateData, oldData, emailCredentials);
+      const result = await updateFacultyDetailsService(id, updateData, oldData, emailCredentials);
       
       // Local state will be updated automatically by the subscribeFaculty listener
-      return success;
+      return result.success;
     } catch (error) {
       console.error('Error updating faculty details:', error);
       return false;
