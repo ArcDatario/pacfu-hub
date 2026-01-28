@@ -32,7 +32,7 @@ export default function Dashboard() {
   ];
 
   const facultyStats = [
-    { title: 'Unread Messages', value: stats.unreadMessages, icon: MessageSquare, description: 'Across all chats' },
+    { title: 'My Groups', value: stats.myGroups, icon: Users },
     { title: 'Active Chats', value: stats.activeChats, icon: MessageSquare },
     { title: 'Pending Polls', value: stats.pendingPolls, icon: Vote, description: 'Awaiting your vote' },
     { title: 'Pending Elections', value: stats.pendingElections, icon: CheckSquare, description: 'Cast your vote' },
