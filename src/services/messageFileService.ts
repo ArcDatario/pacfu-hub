@@ -180,15 +180,15 @@ export const sendFileMessage = async (
 export const getChatFiles = async (chatId: string): Promise<MessageFile[]> => {
   try {
     const messagesRef = collection(db, 'chats', chatId, 'messages');
+    // Query without orderBy to avoid composite index requirement
     const q = query(
       messagesRef,
-      where('type', 'in', ['file', 'image', 'video']),
-      orderBy('timestamp', 'desc')
+      where('type', 'in', ['file', 'image', 'video'])
     );
     
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map(doc => {
+    const files = snapshot.docs.map(doc => {
       const data = doc.data();
       const file = data.file || {};
       return {
@@ -206,6 +206,9 @@ export const getChatFiles = async (chatId: string): Promise<MessageFile[]> => {
         uploadedAt: data.timestamp?.toDate() || new Date(),
       };
     });
+
+    // Sort client-side by uploadedAt descending
+    return files.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
   } catch (error) {
     console.error('Error fetching chat files:', error);
     return [];
@@ -216,15 +219,15 @@ export const getChatFiles = async (chatId: string): Promise<MessageFile[]> => {
 export const getChatMedia = async (chatId: string): Promise<MessageFile[]> => {
   try {
     const messagesRef = collection(db, 'chats', chatId, 'messages');
+    // Query without orderBy to avoid composite index requirement
     const q = query(
       messagesRef,
-      where('type', 'in', ['image', 'video']),
-      orderBy('timestamp', 'desc')
+      where('type', 'in', ['image', 'video'])
     );
     
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map(doc => {
+    const files = snapshot.docs.map(doc => {
       const data = doc.data();
       const file = data.file || {};
       return {
@@ -242,6 +245,9 @@ export const getChatMedia = async (chatId: string): Promise<MessageFile[]> => {
         uploadedAt: data.timestamp?.toDate() || new Date(),
       };
     });
+
+    // Sort client-side by uploadedAt descending
+    return files.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
   } catch (error) {
     console.error('Error fetching chat media:', error);
     return [];
