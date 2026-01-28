@@ -64,7 +64,10 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
     position: faculty.position,
     groups: faculty.groups,
   });
+  const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const emailChanged = formData.email !== faculty.email;
 
   // Subscribe to groups from Firebase
   useEffect(() => {
@@ -84,17 +87,22 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
         position: faculty.position,
         groups: faculty.groups || [],
       });
+      setNewPassword('');
     }
   }, [faculty, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate password if email changed
+    if (emailChanged && newPassword.length < 6) {
+      toast.error('Please enter a password with at least 6 characters for the new email account');
+      return;
+    }
+    
     setLoading(true);
 
     try {
-      // Check if email has changed
-      const emailChanged = formData.email !== faculty.email;
-      
       const updateData: {
         name: string;
         department: string;
@@ -113,7 +121,12 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
         updateData.email = formData.email;
       }
 
-      const success = await updateFacultyDetails(faculty.id, updateData, faculty);
+      const success = await updateFacultyDetails(
+        faculty.id, 
+        updateData, 
+        faculty,
+        emailChanged ? { newEmail: formData.email, newPassword } : undefined
+      );
       
       if (success) {
         // Log the action
@@ -127,7 +140,7 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
         
         toast.success('Faculty details updated successfully');
         if (emailChanged) {
-          toast.info('Note: Login email in authentication system may need to be updated separately.');
+          toast.success(`New login credentials created: ${formData.email}`);
         }
         onOpenChange(false);
       } else {
@@ -190,6 +203,26 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
               />
             </div>
           </div>
+
+          {emailChanged && (
+            <div className="space-y-2 p-3 bg-accent/50 border border-border rounded-md">
+              <Label htmlFor="newPassword" className="text-foreground">
+                New Password (required for new email)
+              </Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter password for new account"
+                required
+                minLength={6}
+              />
+              <p className="text-xs text-muted-foreground">
+                A new login account will be created with this email and password. The faculty member should use these new credentials to log in.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

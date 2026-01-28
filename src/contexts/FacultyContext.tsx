@@ -11,7 +11,12 @@ interface FacultyContextType {
   facultyMembers: FacultyMember[];
   addFaculty: (data: CreateFacultyData) => void;
   updateFaculty: (id: string, data: Partial<FacultyMember>) => void;
-  updateFacultyDetails: (id: string, data: Partial<FacultyMember>, oldData: FacultyMember) => Promise<boolean>;
+  updateFacultyDetails: (
+    id: string, 
+    data: Partial<FacultyMember>, 
+    oldData: FacultyMember,
+    emailCredentials?: { newEmail: string; newPassword: string }
+  ) => Promise<boolean>;
   toggleFacultyStatus: (id: string) => void;
   deleteFacultyMember: (id: string) => Promise<boolean>;
   getFacultyById: (id: string) => FacultyMember | undefined;
@@ -69,18 +74,24 @@ export function FacultyProvider({ children }: { children: ReactNode }) {
     return facultyMembers.find((member) => member.id === id);
   };
 
-  const updateFacultyDetails = async (id: string, data: Partial<FacultyMember>, oldData: FacultyMember) => {
+  const updateFacultyDetails = async (
+    id: string, 
+    data: Partial<FacultyMember>, 
+    oldData: FacultyMember,
+    emailCredentials?: { newEmail: string; newPassword: string }
+  ) => {
     try {
       // Prepare the data to send to Firebase
-      const updateData: Partial<{ name: string; department: string; position: string; groups: string[] }> = {};
+      const updateData: Partial<{ name: string; email: string; department: string; position: string; groups: string[] }> = {};
       
       if (data.name !== undefined) updateData.name = data.name;
+      if (data.email !== undefined) updateData.email = data.email;
       if (data.department !== undefined) updateData.department = data.department;
       if (data.position !== undefined) updateData.position = data.position;
       if (data.groups !== undefined) updateData.groups = data.groups;
 
-      // Update in Firebase
-      const success = await updateFacultyDetailsService(id, updateData, oldData);
+      // Update in Firebase, passing email credentials if provided
+      const success = await updateFacultyDetailsService(id, updateData, oldData, emailCredentials);
       
       // Local state will be updated automatically by the subscribeFaculty listener
       return success;
