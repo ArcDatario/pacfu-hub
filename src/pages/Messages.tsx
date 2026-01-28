@@ -12,11 +12,12 @@ import {
   MessageSquare, 
   MoreVertical,
   Send,
-  User,
   ArrowLeft,
   Loader2,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  FolderOpen,
+  Image
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,11 +29,17 @@ import {
   getChat,
   deleteDirectChat
 } from '@/services/chatService';
+import { 
+  uploadMessageFile, 
+  sendFileMessage,
+  MessageFile 
+} from '@/services/messageFileService';
 import { Chat, Message } from '@/types/chat';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -49,6 +56,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { collection, getDocs, query, where, addDoc, updateDoc, doc, getDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+
+// Import new components
+import { MessageBubble } from '@/components/messages/MessageBubble';
+import { FileUploadButton } from '@/components/messages/FileUploadButton';
+import { ChatMembersDialog } from '@/components/messages/ChatMembersDialog';
+import { ChatFilesDialog } from '@/components/messages/ChatFilesDialog';
+import { MessageSearchDialog } from '@/components/messages/MessageSearchDialog';
+import { FilePreviewModal } from '@/components/messages/FilePreviewModal';
 
 export default function Messages() {
   const { user } = useAuth();
@@ -67,7 +82,15 @@ export default function Messages() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
   const [deletingChat, setDeletingChat] = useState(false);
-  const [userAvatars, setUserAvatars] = useState<Record<string, string>>({}); // Store user avatars
+  const [userAvatars, setUserAvatars] = useState<Record<string, string>>({});
+  const [uploadingFile, setUploadingFile] = useState(false);
+  
+  // Dialog states
+  const [showMembersDialog, setShowMembersDialog] = useState(false);
+  const [showFilesDialog, setShowFilesDialog] = useState(false);
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [previewFile, setPreviewFile] = useState<MessageFile | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unsubscribeChatsRef = useRef<(() => void) | null>(null);
   const unsubscribeMessagesRef = useRef<(() => void) | null>(null);
@@ -123,17 +146,13 @@ export default function Messages() {
       return chat.name || 'Group Chat';
     }
     
-    // For direct chats, show the other person's name
     if (chat.type === 'direct' && user) {
-      // Find the other participant's ID
       const otherParticipantId = chat.participants.find(id => id !== user.id);
       if (otherParticipantId) {
-        // Try to get name from participantNames first
         if (chat.participantNames && chat.participantNames[otherParticipantId]) {
           return chat.participantNames[otherParticipantId];
         }
         
-        // Fallback: look up in faculty members
         const faculty = facultyMembers.find(m => m.id === otherParticipantId);
         if (faculty) {
           return faculty.name;
@@ -146,7 +165,7 @@ export default function Messages() {
     return chat.name || 'Direct Chat';
   }, [user, facultyMembers]);
 
-  // Get avatar for a chat (returns image URL or first letter)
+  // Get avatar for a chat
   const getChatAvatar = useCallback((chat: Chat): { type: 'image' | 'text'; value: string } => {
     if (chat.type === 'group') {
       const ava = chat.avatar;
@@ -156,17 +175,14 @@ export default function Messages() {
       return { type: 'text', value: chat.name?.charAt(0).toUpperCase() || 'G' };
     }
     
-    // For direct chats, use the other person's avatar or first initial
     if (chat.type === 'direct' && user) {
       const otherParticipantId = chat.participants.find(id => id !== user.id);
       if (otherParticipantId) {
-        // Check if there's a stored avatar for this participant in the chat
         const participantAvatars = (chat as any).participantAvatars;
         if (participantAvatars && participantAvatars[otherParticipantId]) {
           return { type: 'image', value: participantAvatars[otherParticipantId] };
         }
         
-        // Check in our fetched user avatars
         if (userAvatars[otherParticipantId]) {
           return { type: 'image', value: userAvatars[otherParticipantId] };
         }
@@ -180,20 +196,17 @@ export default function Messages() {
 
   // Get avatar for a specific user
   const getUserAvatar = useCallback((userId: string): { type: 'image' | 'text'; value: string } => {
-    // First check in userAvatars state
     if (userAvatars[userId]) {
       return { type: 'image', value: userAvatars[userId] };
     }
     
-    // Check in faculty members
     const faculty = facultyMembers.find(m => m.id === userId);
     if (faculty && faculty.avatar) {
       return { type: 'image', value: faculty.avatar };
     }
     
-    // Fallback to first letter of name
-    const user = facultyMembers.find(m => m.id === userId);
-    const displayName = user?.name || 'User';
+    const userMember = facultyMembers.find(m => m.id === userId);
+    const displayName = userMember?.name || 'User';
     return { type: 'text', value: displayName.charAt(0).toUpperCase() };
   }, [userAvatars, facultyMembers]);
 
@@ -208,9 +221,6 @@ export default function Messages() {
     setLoadingChats(true);
     
     const unsubscribe = subscribeToChats(user.id, (chats) => {
-      console.log('Received chats from subscription:', chats);
-      
-      // Sort chats by lastMessageTime (newest first)
       const sortedChats = [...chats].sort((a, b) => {
         const timeA = a.lastMessageTime?.getTime() || a.createdAt.getTime();
         const timeB = b.lastMessageTime?.getTime() || b.createdAt.getTime();
@@ -220,7 +230,6 @@ export default function Messages() {
       setConversations(sortedChats);
       setLoadingChats(false);
       
-      // Fetch avatars for all participants in all chats
       const allParticipants = new Set<string>();
       chats.forEach(chat => {
         chat.participants.forEach(participant => {
@@ -283,7 +292,6 @@ export default function Messages() {
   // Fetch avatars when selected chat changes
   useEffect(() => {
     if (selectedChat && user) {
-      // Get participants other than current user
       const otherParticipants = selectedChat.participants.filter(id => id !== user.id);
       if (otherParticipants.length > 0) {
         fetchUserAvatars(otherParticipants);
@@ -295,7 +303,7 @@ export default function Messages() {
     getChatDisplayName(conv).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Backfill lastMessage previews for chats that have messages but empty preview
+  // Backfill lastMessage previews
   useEffect(() => {
     const backfill = async () => {
       try {
@@ -338,6 +346,39 @@ export default function Messages() {
     setSendingMessage(false);
   };
 
+  const handleFileUpload = async (file: File) => {
+    if (!selectedChat || !user) return;
+
+    setUploadingFile(true);
+    try {
+      const result = await uploadMessageFile(
+        file,
+        selectedChat.id,
+        user.id,
+        user.name,
+        (progress) => {
+          console.log('Upload progress:', progress);
+        }
+      );
+
+      if (result) {
+        await sendFileMessage(
+          selectedChat.id,
+          user.id,
+          user.name,
+          file,
+          result.storagePath,
+          result.downloadUrl
+        );
+        toast.success('File sent');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload file');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -364,7 +405,6 @@ export default function Messages() {
     const member = facultyMembers.find(m => m.id === memberId);
     if (!member || !user) return;
 
-    // Check if conversation already exists in local state
     const existingChat = conversations.find(chat => 
       chat.type === 'direct' && 
       chat.participants.includes(memberId) && 
@@ -377,7 +417,6 @@ export default function Messages() {
       return;
     }
 
-    // Create new direct chat
     setCreatingChat(true);
     
     try {
@@ -389,11 +428,9 @@ export default function Messages() {
       );
       
       if (chatId) {
-        // Immediately fetch the created chat from Firebase
         const newChat = await getChat(chatId);
         
         if (newChat) {
-          // Add to conversations list at the top
           setConversations(prev => {
             const exists = prev.some(c => c.id === chatId);
             if (!exists) {
@@ -403,8 +440,6 @@ export default function Messages() {
           });
           
           setSelectedChat(newChat);
-          
-          // Fetch avatar for the new chat participant
           fetchUserAvatars([memberId]);
         }
       }
@@ -416,7 +451,6 @@ export default function Messages() {
     }
   };
 
-  // Handle delete conversation
   const handleDeleteChat = async () => {
     if (!chatToDelete) return;
     
@@ -425,9 +459,7 @@ export default function Messages() {
       const success = await deleteDirectChat(chatToDelete.id);
       if (success) {
         toast.success('Conversation deleted');
-        // Remove from local state
         setConversations(prev => prev.filter(c => c.id !== chatToDelete.id));
-        // Clear selected if it was the deleted one
         if (selectedChat?.id === chatToDelete.id) {
           setSelectedChat(null);
         }
@@ -464,13 +496,12 @@ export default function Messages() {
     checkDeleted();
   }, [selectedChat, isOtherParticipantDeleted]);
 
-  // Ensure group chats exist and include the current user based on their assigned groups
+  // Ensure group chats exist based on user's groups
   useEffect(() => {
     if (!user) return;
 
     const syncGroupsToChats = async () => {
       try {
-        // Fetch the current user's groups from Firestore
         const userSnap = await getDoc(doc(db, 'users', user.id));
         const userData = userSnap.exists() ? userSnap.data() as any : null;
         const userGroups: string[] = Array.isArray(userData?.groups) ? userData.groups : [];
@@ -479,13 +510,11 @@ export default function Messages() {
         const chatsRef = collection(db, 'chats');
 
         for (const groupName of userGroups) {
-          // Get group avatar from groups collection
           const groupsRef = collection(db, 'groups');
           const groupQ = query(groupsRef, where('name', '==', groupName));
           const groupSnap = await getDocs(groupQ);
           const groupAvatar = groupSnap.empty ? undefined : (groupSnap.docs[0].data() as any).avatar;
 
-          // Find existing chat by group name (avoid composite indexes by querying only by name)
           const existingQ = query(chatsRef, where('name', '==', groupName));
           const existingSnap = await getDocs(existingQ);
           const existingDoc = existingSnap.docs.find(d => (d.data() as any).type === 'group');
@@ -495,7 +524,6 @@ export default function Messages() {
             const participants: string[] = Array.isArray(data.participants) ? data.participants : [];
             const participantNames: Record<string, string> = data.participantNames || {};
 
-            // Ensure current user is a participant
             if (!participants.includes(user.id)) {
               await updateDoc(existingDoc.ref, {
                 participants: [...participants, user.id],
@@ -506,13 +534,11 @@ export default function Messages() {
               });
             }
 
-            // Sync avatar from group document if available
             const desiredAvatar = groupAvatar || groupName.charAt(0).toUpperCase();
             if (data.avatar !== desiredAvatar) {
               await updateDoc(existingDoc.ref, { avatar: desiredAvatar });
             }
           } else {
-            // Create a new group chat document and include all members who have this group
             const usersRef = collection(db, 'users');
             const membersQ = query(usersRef, where('groups', 'array-contains', groupName));
             const membersSnap = await getDocs(membersQ);
@@ -551,9 +577,13 @@ export default function Messages() {
     syncGroupsToChats();
   }, [user]);
 
+  const handlePreviewFile = (file: MessageFile) => {
+    setPreviewFile(file);
+  };
+
   return (
     <DashboardLayout>
-      <div className="flex h-[calc(100vh-7rem)] gap-6">
+      <div className="flex h-[calc(100vh-7rem)] gap-4">
         {/* Conversation List - LEFT SIDE */}
         <div className={cn(
           "w-80 flex-shrink-0 flex flex-col rounded-xl bg-card shadow-card overflow-hidden",
@@ -652,7 +682,7 @@ export default function Messages() {
                   >
                     <div className="flex items-start gap-3">
                       <div className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-full font-medium overflow-hidden shrink-0",
+                        "flex h-12 w-12 items-center justify-center rounded-full font-medium overflow-hidden shrink-0",
                         conv.type === 'group' 
                           ? "bg-primary text-primary-foreground" 
                           : "bg-accent"
@@ -661,6 +691,7 @@ export default function Messages() {
                           <img src={avatar.value} alt={displayName} className="h-full w-full object-cover" />
                         ) : (
                           <span className={cn(
+                            "text-lg",
                             conv.type === 'group' ? 'text-primary-foreground' : 'text-accent-foreground'
                           )}>{avatar.value}</span>
                         )}
@@ -669,17 +700,19 @@ export default function Messages() {
                         <div className="flex items-center justify-between">
                           <p className="font-medium text-card-foreground truncate">
                             {displayName}
-                            {conv.type === 'direct' && (
-                              <span className="ml-2 text-xs text-muted-foreground">(Direct)</span>
-                            )}
                           </p>
                           <span className="text-xs text-muted-foreground whitespace-nowrap">
                             {formatTime(conv.lastMessageTime)}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground truncate">
+                        <p className="text-sm text-muted-foreground truncate mt-0.5">
                           {conv.lastMessage || 'No messages yet'}
                         </p>
+                        {conv.type === 'group' && (
+                          <p className="text-xs text-muted-foreground/70 mt-0.5">
+                            {conv.participants.length} members
+                          </p>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -697,7 +730,7 @@ export default function Messages() {
           {selectedChat ? (
             <>
               {/* Chat Header */}
-              <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center justify-between p-4 border-b bg-card">
                 <div className="flex items-center gap-3">
                   <Button 
                     variant="ghost" 
@@ -726,45 +759,72 @@ export default function Messages() {
                   </div>
                   <div>
                     <h3 className="font-medium text-card-foreground">
-                      {selectedChat.type === 'direct' 
-                        ? getChatDisplayName(selectedChat)
-                        : selectedChat.name
-                      }
+                      {getChatDisplayName(selectedChat)}
                       {isParticipantDeleted && (
-                        <span className="ml-2 text-xs text-destructive">(Account Deleted)</span>
+                        <span className="ml-2 text-xs text-destructive">(Deleted)</span>
                       )}
                     </h3>
                     <p className="text-xs text-muted-foreground">
                       {selectedChat.type === 'group' 
                         ? `${selectedChat.participants.length} members`
                         : isParticipantDeleted 
-                          ? 'User account no longer exists'
-                          : 'Direct message'
+                          ? 'Account deleted'
+                          : 'Active'
                       }
                     </p>
                   </div>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-popover border shadow-md">
-                    <DropdownMenuItem 
-                      onClick={() => openDeleteDialog(selectedChat)}
-                      className="text-destructive focus:text-destructive cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Conversation
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                
+                <div className="flex items-center gap-1">
+                  {/* Search in chat */}
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => setShowSearchDialog(true)}
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  
+                  {/* More options */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-popover border shadow-md w-48">
+                      {selectedChat.type === 'group' && (
+                        <DropdownMenuItem 
+                          onClick={() => setShowMembersDialog(true)}
+                          className="cursor-pointer"
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          View Members
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem 
+                        onClick={() => setShowFilesDialog(true)}
+                        className="cursor-pointer"
+                      >
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Files & Media
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={() => openDeleteDialog(selectedChat)}
+                        className="text-destructive focus:text-destructive cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Conversation
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               {/* Deleted Account Warning */}
               {isParticipantDeleted && (
-                <Alert variant="destructive" className="m-4 mb-0">
+                <Alert variant="destructive" className="m-4 mb-0 rounded-lg">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription className="flex items-center justify-between">
                     <span>
@@ -776,7 +836,7 @@ export default function Messages() {
                       onClick={() => openDeleteDialog(selectedChat)}
                       className="ml-4 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
                     >
-                      Delete Conversation
+                      Delete
                     </Button>
                   </AlertDescription>
                 </Alert>
@@ -784,7 +844,7 @@ export default function Messages() {
 
               {/* Messages Area */}
               <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {loadingMessages ? (
                     <div className="flex flex-col items-center justify-center h-full py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -807,76 +867,16 @@ export default function Messages() {
                       const senderAvatar = getUserAvatar(message.senderId);
                       
                       return (
-                        <div
+                        <MessageBubble
                           key={message.id}
-                          className={cn(
-                            "flex items-end gap-2",
-                            isOwn ? "justify-end" : "justify-start"
-                          )}
-                        >
-                          {/* Sender Avatar (only show for incoming messages) */}
-                          {!isOwn && (
-                            <div className="flex-shrink-0">
-                              <div className="h-8 w-8 rounded-full overflow-hidden">
-                                {senderAvatar.type === 'image' ? (
-                                  <img 
-                                    src={senderAvatar.value} 
-                                    alt={message.senderName} 
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-full w-full bg-accent flex items-center justify-center">
-                                    <span className="text-accent-foreground text-xs font-medium">
-                                      {senderAvatar.value}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Message Bubble */}
-                          <div className={cn(
-                            "max-w-[70%] rounded-2xl px-4 py-2",
-                            isOwn 
-                              ? "bg-primary text-primary-foreground rounded-br-md" 
-                              : "bg-muted rounded-bl-md"
-                          )}>
-                            {!isOwn && selectedChat.type === 'group' && (
-                              <p className="text-xs font-medium mb-1 opacity-70">
-                                {message.senderName}
-                              </p>
-                            )}
-                            <p className="text-sm">{message.content}</p>
-                            <p className={cn(
-                              "text-xs mt-1",
-                              isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
-                            )}>
-                              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                          
-                          {/* Current User Avatar (only show for own messages) */}
-                          {isOwn && user && (
-                            <div className="flex-shrink-0">
-                              <div className="h-8 w-8 rounded-full overflow-hidden">
-                                {user.avatar ? (
-                                  <img 
-                                    src={user.avatar} 
-                                    alt={user.name} 
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-full w-full bg-primary flex items-center justify-center">
-                                    <span className="text-primary-foreground text-xs font-medium">
-                                      {user.name.charAt(0)}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                          message={message}
+                          isOwn={isOwn}
+                          senderAvatar={senderAvatar}
+                          userAvatar={user?.avatar}
+                          userName={user?.name}
+                          showSenderName={selectedChat.type === 'group'}
+                          onPreviewFile={handlePreviewFile}
+                        />
                       );
                     })
                   )}
@@ -885,19 +885,26 @@ export default function Messages() {
               </ScrollArea>
 
               {/* Message Input */}
-              <div className="p-4 border-t">
-                <div className="flex gap-2">
+              <div className="p-4 border-t bg-card">
+                <div className="flex items-center gap-2">
+                  <FileUploadButton
+                    onFileSelect={handleFileUpload}
+                    disabled={isParticipantDeleted}
+                    uploading={uploadingFile}
+                  />
                   <Input
-                    placeholder={isParticipantDeleted ? "Cannot send messages to deleted account" : "Type a message..."}
+                    placeholder={isParticipantDeleted ? "Cannot send messages" : "Type a message..."}
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    disabled={sendingMessage || isParticipantDeleted}
+                    disabled={sendingMessage || isParticipantDeleted || uploadingFile}
                     className="flex-1"
                   />
                   <Button 
                     onClick={handleSendMessage} 
-                    disabled={!messageInput.trim() || sendingMessage || isParticipantDeleted}
+                    disabled={!messageInput.trim() || sendingMessage || isParticipantDeleted || uploadingFile}
+                    size="icon"
+                    className="h-10 w-10 rounded-full"
                   >
                     {sendingMessage ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -932,7 +939,7 @@ export default function Messages() {
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Dialogs */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -962,6 +969,43 @@ export default function Messages() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Chat Members Dialog */}
+      {selectedChat && (
+        <ChatMembersDialog
+          open={showMembersDialog}
+          onOpenChange={setShowMembersDialog}
+          chat={selectedChat}
+          currentUserId={user?.id}
+          userAvatars={userAvatars}
+        />
+      )}
+
+      {/* Chat Files Dialog */}
+      {selectedChat && (
+        <ChatFilesDialog
+          open={showFilesDialog}
+          onOpenChange={setShowFilesDialog}
+          chatId={selectedChat.id}
+          onPreviewFile={handlePreviewFile}
+        />
+      )}
+
+      {/* Message Search Dialog */}
+      {selectedChat && (
+        <MessageSearchDialog
+          open={showSearchDialog}
+          onOpenChange={setShowSearchDialog}
+          chatId={selectedChat.id}
+        />
+      )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        open={!!previewFile}
+        onOpenChange={(open) => !open && setPreviewFile(null)}
+        file={previewFile}
+      />
     </DashboardLayout>
   );
 }
