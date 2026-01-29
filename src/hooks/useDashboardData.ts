@@ -162,7 +162,7 @@ export function useDashboardData() {
           }
         }
 
-        // Fetch financial records for total funds (admin only)
+        // Fetch financial records for net balance (admin only)
         let totalFunds = 0;
         if (user.role === 'admin') {
           const { data: financialRecords } = await supabase
@@ -171,7 +171,7 @@ export function useDashboardData() {
           
           if (financialRecords) {
             financialRecords.forEach(record => {
-              if (record.type === 'income' || record.type === 'fund') {
+              if (record.type === 'income') {
                 totalFunds += Number(record.amount);
               } else if (record.type === 'expense') {
                 totalFunds -= Number(record.amount);

@@ -5,7 +5,7 @@ import { QuickActions } from '@/components/dashboard/QuickActions';
 import { UpcomingEvents } from '@/components/dashboard/UpcomingEvents';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardData } from '@/hooks/useDashboardData';
-import { Users, MessageSquare, FileText, Vote, Megaphone, DollarSign, CheckSquare } from 'lucide-react';
+import { Users, MessageSquare, Vote, Megaphone, DollarSign, CheckSquare } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Dashboard() {
@@ -23,12 +23,10 @@ export default function Dashboard() {
   };
 
   const adminStats = [
-    { title: 'Total Faculty', value: stats.totalFaculty, icon: Users },
     { title: 'Announcements', value: stats.totalAnnouncements, icon: Megaphone },
-    { title: 'Documents', value: stats.totalDocuments, icon: FileText },
     { title: 'Active Polls', value: stats.activePolls, icon: Vote },
     { title: 'Active Elections', value: stats.activeElections, icon: CheckSquare },
-    { title: 'Total Funds', value: formatCurrency(stats.totalFunds), icon: DollarSign },
+    { title: 'Net Balance', value: formatCurrency(stats.totalFunds), icon: DollarSign },
   ];
 
   const facultyStats = [
