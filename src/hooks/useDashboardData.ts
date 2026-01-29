@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -162,22 +162,21 @@ export function useDashboardData() {
           }
         }
 
-        // Fetch financial records for net balance (admin only)
+        // Fetch financial records for net balance from Firestore (admin only)
         let totalFunds = 0;
         if (user.role === 'admin') {
-          const { data: financialRecords } = await supabase
-            .from('financial_records')
-            .select('amount, type');
+          const financialRecordsQuery = query(collection(db, 'financial_records'));
+          const financialRecordsSnapshot = await getDocs(financialRecordsQuery);
           
-          if (financialRecords) {
-            financialRecords.forEach(record => {
-              if (record.type === 'income') {
-                totalFunds += Number(record.amount);
-              } else if (record.type === 'expense') {
-                totalFunds -= Number(record.amount);
-              }
-            });
-          }
+          financialRecordsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const amount = Number(data.amount) || 0;
+            if (data.type === 'income') {
+              totalFunds += amount;
+            } else if (data.type === 'expense') {
+              totalFunds -= amount;
+            }
+          });
         }
 
         // Get user's groups count
