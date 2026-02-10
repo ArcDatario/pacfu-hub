@@ -29,14 +29,15 @@ interface CreateFacultyDialogProps {
 }
 
 const departments = [
-  'College of Arts and Sciences',
-  'College of Engineering',
-  'College of Business',
-  'College of Agriculture',
-  'College of Education',
-  'Graduate Studies',
-  'Administration',
+  'CAS',
+  'CASTech',
+  'CBEE',
+  'CFA',
+  'COECS',
+  'COED',
+  'CVM',
 ];
+
 
 const positions = [
   'Instructor I',

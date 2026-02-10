@@ -27,14 +27,15 @@ interface EditFacultyDialogProps {
 
 // Use the same departments list as CreateFacultyDialog
 const departments = [
-  'College of Arts and Sciences',
-  'College of Engineering',
-  'College of Business',
-  'College of Agriculture',
-  'College of Education',
-  'Graduate Studies',
-  'Administration',
+  'CAS',
+  'CASTech',
+  'CBEE',
+  'CFA',
+  'COECS',
+  'COED',
+  'CVM',
 ];
+
 
 // Use the same positions list as CreateFacultyDialog
 const positions = [
