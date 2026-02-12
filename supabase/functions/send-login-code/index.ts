@@ -1,14 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-// In-memory store for verification codes (per function instance)
-const verificationCodes = new Map<string, { code: string; expiresAt: number }>();
 
 const generateCode = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -99,14 +97,35 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("RESEND_API_KEY is not configured");
     }
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("Supabase configuration is missing");
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const { action, email, name, code: submittedCode } = await req.json();
 
     if (action === "send") {
-      // Generate and send code
-      const code = generateCode();
-      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+      // Delete any existing codes for this email first
+      await supabase
+        .from("verification_codes")
+        .delete()
+        .eq("email", email);
 
-      verificationCodes.set(email, { code, expiresAt });
+      // Generate and store new code
+      const code = generateCode();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+      const { error: insertError } = await supabase
+        .from("verification_codes")
+        .insert({ email, code, expires_at: expiresAt });
+
+      if (insertError) {
+        console.error("Error storing verification code:", insertError);
+        throw new Error("Failed to store verification code");
+      }
 
       const resend = new Resend(resendApiKey);
       const emailResponse = await resend.emails.send({
@@ -123,18 +142,25 @@ const handler = async (req: Request): Promise<Response> => {
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     } else if (action === "verify") {
-      // Verify submitted code
-      const stored = verificationCodes.get(email);
+      // Look up the code from the database
+      const { data: stored, error: fetchError } = await supabase
+        .from("verification_codes")
+        .select("*")
+        .eq("email", email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
 
-      if (!stored) {
+      if (fetchError || !stored) {
         return new Response(
           JSON.stringify({ success: false, error: "No verification code found. Please request a new one." }),
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
 
-      if (Date.now() > stored.expiresAt) {
-        verificationCodes.delete(email);
+      if (new Date() > new Date(stored.expires_at)) {
+        // Clean up expired code
+        await supabase.from("verification_codes").delete().eq("id", stored.id);
         return new Response(
           JSON.stringify({ success: false, error: "Verification code has expired. Please request a new one." }),
           { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
@@ -149,7 +175,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Code is valid - clean up
-      verificationCodes.delete(email);
+      await supabase.from("verification_codes").delete().eq("id", stored.id);
 
       return new Response(
         JSON.stringify({ success: true, message: "Code verified successfully" }),
