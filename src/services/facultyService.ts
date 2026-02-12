@@ -219,7 +219,7 @@ export const updateFacultyDetails = async (
       } catch (authError: any) {
         console.error('Error creating new auth account:', authError);
         if (authError.code === 'auth/email-already-in-use') {
-          throw new Error('An account with this email already exists');
+          throw new Error('The email has been used already');
         }
         throw authError;
       }

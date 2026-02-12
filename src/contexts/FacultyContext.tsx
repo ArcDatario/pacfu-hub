@@ -97,7 +97,7 @@ export function FacultyProvider({ children }: { children: ReactNode }) {
       return result.success;
     } catch (error) {
       console.error('Error updating faculty details:', error);
-      return false;
+      throw error;
     }
   };
 

@@ -129,9 +129,9 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
       } else {
         toast.error('Failed to update faculty details');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating faculty:', error);
-      toast.error('An error occurred while updating faculty details');
+      toast.error(error?.message || 'An error occurred while updating faculty details');
     } finally {
       setLoading(false);
     }
