@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { useAuth } from '@/contexts/AuthContext';
 import { GraduationCap } from 'lucide-react';
 
@@ -29,7 +30,6 @@ export default function Login() {
       setError(result.error || 'Invalid credentials');
     }
   };
-
 
   return (
     <div className="min-h-screen flex">
@@ -109,14 +109,14 @@ export default function Login() {
               </div>
               <div>
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="mt-1.5"
-                />
+                <div className="mt-1.5">
+                  <PasswordInput
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                  />
+                </div>
               </div>
             </div>
 

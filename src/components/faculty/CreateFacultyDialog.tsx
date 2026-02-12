@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { logFacultyAction } from '@/services/logService';
 import { toast } from 'sonner';
 import { Group, subscribeToGroups } from '@/services/groupService';
+import { validatePassword, PASSWORD_REQUIREMENTS } from '@/lib/passwordValidation';
 
 interface CreateFacultyDialogProps {
   open: boolean;
@@ -37,7 +39,6 @@ const departments = [
   'COED',
   'CVM',
 ];
-
 
 const positions = [
   'Instructor I',
@@ -55,7 +56,6 @@ const positions = [
   'Professor IV',
 ];
 
-
 export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogProps) {
   const { user, createFaculty } = useAuth();
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
@@ -70,7 +70,6 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Subscribe to groups from Firebase
   useEffect(() => {
     const unsubscribe = subscribeToGroups((groups) => {
       setAvailableGroups(groups);
@@ -91,8 +90,9 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
       return;
     }
 
-    if (formData.password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    const passwordCheck = validatePassword(formData.password);
+    if (!passwordCheck.valid) {
+      toast.error(passwordCheck.message);
       return;
     }
 
@@ -109,7 +109,6 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
       );
 
       if (result.success) {
-        // Log the action
         if (user) {
           await logFacultyAction('created', formData.name, user.id, user.name, {
             email: formData.email,
@@ -185,9 +184,8 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="password">Password *</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
@@ -195,15 +193,15 @@ export function CreateFacultyDialog({ open, onOpenChange }: CreateFacultyDialogP
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password *</Label>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
-                type="password"
                 placeholder="••••••••"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData((prev) => ({ ...prev, confirmPassword: e.target.value }))}
               />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS}</p>
 
           <div className="space-y-2">
             <Label htmlFor="department">Department *</Label>
