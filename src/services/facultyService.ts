@@ -17,6 +17,7 @@ import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth'
 import { initializeApp, deleteApp } from 'firebase/app';
 import { db, firebaseConfig } from '@/lib/firebase';
 import { FacultyMember } from '@/types/faculty';
+import { supabase } from '@/integrations/supabase/client';
 
 // Get all faculty members from Firestore
 export const getAllFaculty = async (): Promise<FacultyMember[]> => {
@@ -196,6 +197,20 @@ export const updateFacultyDetails = async (
           
           // Delete the old user document
           await deleteDoc(oldUserRef);
+          
+          // Delete the old Firebase Auth account via edge function
+          try {
+            const { data, error } = await supabase.functions.invoke('delete-firebase-user', {
+              body: { uid: userId },
+            });
+            if (error) {
+              console.error('Failed to delete old Firebase Auth account:', error);
+            } else {
+              console.log('Old Firebase Auth account deleted successfully for UID:', userId);
+            }
+          } catch (deleteAuthError) {
+            console.error('Error calling delete-firebase-user:', deleteAuthError);
+          }
           
           console.log('Successfully migrated user from', userId, 'to', newUserId);
         }

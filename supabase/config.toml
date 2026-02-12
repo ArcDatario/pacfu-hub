@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.send-login-code]
 verify_jwt = false
+
+[functions.delete-firebase-user]
+verify_jwt = false
