@@ -4,17 +4,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useAuth } from '@/contexts/AuthContext';
-import { GraduationCap } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { GraduationCap, ArrowLeft, Loader2, Mail } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
+  const [otpCode, setOtpCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [userName, setUserName] = useState('');
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
@@ -23,12 +33,119 @@ export default function Login() {
       return;
     }
     
+    // First validate credentials
     const result = await login(email, password);
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
+    if (!result.success) {
       setError(result.error || 'Invalid credentials');
+      return;
     }
+
+    // Get user name from Firestore
+    let fetchedName = 'User';
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        if (userDoc.exists()) {
+          fetchedName = userDoc.data().name || 'User';
+        }
+      }
+    } catch {}
+    setUserName(fetchedName);
+
+    // Credentials valid - now send verification code
+    setSendingCode(true);
+    
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('send-login-code', {
+        body: {
+          action: 'send',
+          email: email,
+          name: fetchedName,
+        },
+      });
+
+      if (fnError) throw fnError;
+      if (!data?.success) throw new Error(data?.error || 'Failed to send code');
+
+      toast.success('Verification code sent to your email');
+      setStep('otp');
+    } catch (err: any) {
+      console.error('Error sending verification code:', err);
+      setError('Failed to send verification code. Please try again.');
+      // Sign out since we can't verify
+      // The user is already signed in from the login call, but we won't redirect
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleOtpVerify = async () => {
+    if (otpCode.length !== 6) {
+      setError('Please enter the complete 6-digit code');
+      return;
+    }
+
+    setError('');
+    setVerifyingCode(true);
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('send-login-code', {
+        body: {
+          action: 'verify',
+          email: email,
+          code: otpCode,
+        },
+      });
+
+      if (fnError) throw fnError;
+      
+      if (!data?.success) {
+        setError(data?.error || 'Invalid verification code');
+        setVerifyingCode(false);
+        return;
+      }
+
+      toast.success('Login verified successfully!');
+      navigate('/dashboard');
+    } catch (err: any) {
+      console.error('Error verifying code:', err);
+      setError('Failed to verify code. Please try again.');
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setSendingCode(true);
+    setError('');
+    setOtpCode('');
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('send-login-code', {
+        body: {
+          action: 'send',
+          email: email,
+          name: userName,
+        },
+      });
+
+      if (fnError) throw fnError;
+      if (!data?.success) throw new Error(data?.error || 'Failed to resend code');
+
+      toast.success('New verification code sent!');
+    } catch (err: any) {
+      console.error('Error resending code:', err);
+      setError('Failed to resend code. Please try again.');
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleBack = () => {
+    setStep('credentials');
+    setOtpCode('');
+    setError('');
   };
 
   return (
@@ -73,7 +190,6 @@ export default function Login() {
           </div>
         </div>
         
-        {/* Decorative Elements */}
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-accent/10 rounded-full blur-3xl" />
         <div className="absolute top-20 right-20 w-64 h-64 bg-accent/5 rounded-full blur-2xl" />
       </div>
@@ -88,46 +204,127 @@ export default function Login() {
               </div>
               <span className="font-display text-2xl font-bold text-foreground">PACFU</span>
             </div>
-            <h2 className="font-display text-2xl font-bold text-foreground">Welcome back</h2>
-            <p className="mt-2 text-muted-foreground">
-              Sign in to access your PACFU portal
-            </p>
+            
+            {step === 'credentials' ? (
+              <>
+                <h2 className="font-display text-2xl font-bold text-foreground">Welcome back</h2>
+                <p className="mt-2 text-muted-foreground">
+                  Sign in to access your PACFU portal
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="font-display text-2xl font-bold text-foreground">Verify Your Identity</h2>
+                <p className="mt-2 text-muted-foreground">
+                  Enter the 6-digit code sent to <strong>{email}</strong>
+                </p>
+              </>
+            )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="email">Email address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@psau.edu.ph"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <div className="mt-1.5">
-                  <PasswordInput
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
+          {step === 'credentials' ? (
+            <form onSubmit={handleCredentialsSubmit} className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="email">Email address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@psau.edu.ph"
+                    className="mt-1.5"
                   />
                 </div>
+                <div>
+                  <Label htmlFor="password">Password</Label>
+                  <div className="mt-1.5">
+                    <PasswordInput
+                      id="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
+
+              <Button type="submit" size="lg" className="w-full" disabled={isLoading || sendingCode}>
+                {isLoading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Signing in...</>
+                ) : sendingCode ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Sending code...</>
+                ) : (
+                  'Sign in'
+                )}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex justify-center">
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Mail className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+
+              <div className="flex justify-center">
+                <InputOTP
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(value) => setOtpCode(value)}
+                >
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              {error && (
+                <p className="text-sm text-destructive text-center">{error}</p>
+              )}
+
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={handleOtpVerify}
+                disabled={otpCode.length !== 6 || verifyingCode}
+              >
+                {verifyingCode ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Verifying...</>
+                ) : (
+                  'Verify & Continue'
+                )}
+              </Button>
+
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="sm" onClick={handleBack}>
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Back
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResendCode}
+                  disabled={sendingCode}
+                >
+                  {sendingCode ? (
+                    <><Loader2 className="h-4 w-4 animate-spin mr-1" />Sending...</>
+                  ) : (
+                    'Resend Code'
+                  )}
+                </Button>
               </div>
             </div>
-
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
-
-            <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign in'}
-            </Button>
-          </form>
+          )}
         </div>
       </div>
     </div>
