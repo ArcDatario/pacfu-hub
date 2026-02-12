@@ -90,7 +90,7 @@ export default function Login() {
     setVerifyingCode(true);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('send-login-code', {
+      const response = await supabase.functions.invoke('send-login-code', {
         body: {
           action: 'verify',
           email: email,
@@ -98,7 +98,23 @@ export default function Login() {
         },
       });
 
-      if (fnError) throw fnError;
+      const data = response.data;
+      const fnError = response.error;
+
+      // Handle FunctionsHttpError - parse the response body for the error message
+      if (fnError) {
+        // Try to get the error message from the response context
+        let errorMsg = 'Invalid verification code.';
+        try {
+          if (fnError.context && typeof fnError.context === 'object') {
+            const responseBody = await (fnError.context as Response).json();
+            errorMsg = responseBody?.error || errorMsg;
+          }
+        } catch {}
+        setError(errorMsg);
+        setVerifyingCode(false);
+        return;
+      }
       
       if (!data?.success) {
         setError(data?.error || 'Invalid verification code');
