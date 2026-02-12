@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
@@ -18,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { logFacultyAction } from '@/services/logService';
 import { FacultyMember } from '@/types/faculty';
 import { Group, subscribeToGroups } from '@/services/groupService';
+import { validatePassword, PASSWORD_REQUIREMENTS } from '@/lib/passwordValidation';
 
 interface EditFacultyDialogProps {
   open: boolean;
@@ -25,33 +27,15 @@ interface EditFacultyDialogProps {
   faculty: FacultyMember;
 }
 
-// Use the same departments list as CreateFacultyDialog
 const departments = [
-  'CAS',
-  'CASTech',
-  'CBEE',
-  'CFA',
-  'COECS',
-  'COED',
-  'CVM',
+  'CAS', 'CASTech', 'CBEE', 'CFA', 'COECS', 'COED', 'CVM',
 ];
 
-
-// Use the same positions list as CreateFacultyDialog
 const positions = [
-  'Instructor I',
-  'Instructor II',
-  'Instructor III',
-  'Assistant Professor I',
-  'Assistant Professor II',
-  'Assistant Professor III',
-  'Associate Professor I',
-  'Associate Professor II',
-  'Associate Professor III',
-  'Professor I',
-  'Professor II',
-  'Professor III',
-  'Professor IV',
+  'Instructor I', 'Instructor II', 'Instructor III',
+  'Assistant Professor I', 'Assistant Professor II', 'Assistant Professor III',
+  'Associate Professor I', 'Associate Professor II', 'Associate Professor III',
+  'Professor I', 'Professor II', 'Professor III', 'Professor IV',
 ];
 
 export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDialogProps) {
@@ -70,7 +54,6 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
 
   const emailChanged = formData.email !== faculty.email;
 
-  // Subscribe to groups from Firebase
   useEffect(() => {
     const unsubscribe = subscribeToGroups((groups) => {
       setAvailableGroups(groups);
@@ -78,7 +61,6 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
     return () => unsubscribe();
   }, []);
 
-  // Update form data when faculty prop changes or dialog opens
   useEffect(() => {
     if (faculty && open) {
       setFormData({
@@ -95,10 +77,12 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate password if email changed
-    if (emailChanged && newPassword.length < 6) {
-      toast.error('Please enter a password with at least 6 characters for the new email account');
-      return;
+    if (emailChanged) {
+      const passwordCheck = validatePassword(newPassword);
+      if (!passwordCheck.valid) {
+        toast.error(passwordCheck.message);
+        return;
+      }
     }
     
     setLoading(true);
@@ -117,7 +101,6 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
         groups: formData.groups,
       };
 
-      // Include email in update if changed
       if (emailChanged) {
         updateData.email = formData.email;
       }
@@ -130,7 +113,6 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
       );
       
       if (success) {
-        // Log the action
         if (user) {
           const updatedFields = Object.keys(updateData);
           await logFacultyAction('updated', faculty.name, user.id, user.name, {
@@ -183,25 +165,11 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
+              <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
             </div>
-            
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
+              <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
             </div>
           </div>
 
@@ -210,17 +178,16 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
               <Label htmlFor="newPassword" className="text-foreground">
                 New Password (required for new email)
               </Label>
-              <Input
+              <PasswordInput
                 id="newPassword"
-                type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter password for new account"
                 required
-                minLength={6}
+                minLength={8}
               />
               <p className="text-xs text-muted-foreground">
-                A new login account will be created with this email and password. The faculty member should use these new credentials to log in.
+                {PASSWORD_REQUIREMENTS}
               </p>
             </div>
           )}
@@ -228,58 +195,33 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="department">Department</Label>
-              <Select 
-                value={formData.department} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, department: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
+              <Select value={formData.department} onValueChange={(value) => setFormData(prev => ({ ...prev, department: value }))}>
+                <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
                 <SelectContent>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                  ))}
+                  {departments.map((dept) => (<SelectItem key={dept} value={dept}>{dept}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
-            
             <div className="space-y-2">
               <Label htmlFor="position">Position</Label>
-              <Select
-                value={formData.position}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, position: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select position" />
-                </SelectTrigger>
+              <Select value={formData.position} onValueChange={(value) => setFormData(prev => ({ ...prev, position: value }))}>
+                <SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger>
                 <SelectContent>
-                  {positions.map((pos) => (
-                    <SelectItem key={pos} value={pos}>{pos}</SelectItem>
-                  ))}
+                  {positions.map((pos) => (<SelectItem key={pos} value={pos}>{pos}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="groups">
-              Assign to Groups (Optional)
-            </Label>
+            <Label htmlFor="groups">Assign to Groups (Optional)</Label>
             {availableGroups.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No groups available. Create groups in the Faculty Management page first.
-              </p>
+              <p className="text-sm text-muted-foreground">No groups available. Create groups in the Faculty Management page first.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border rounded-md p-2">
                 {availableGroups.map((group) => (
-                  <label
-                    key={group.id}
-                    className="flex items-center gap-2 text-sm cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={formData.groups.includes(group.name)}
-                      onCheckedChange={() => toggleGroup(group.name)}
-                    />
+                  <label key={group.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox checked={formData.groups.includes(group.name)} onCheckedChange={() => toggleGroup(group.name)} />
                     <span className="truncate" title={group.name}>{group.name}</span>
                   </label>
                 ))}
@@ -288,17 +230,8 @@ export function EditFacultyDialog({ open, onOpenChange, faculty }: EditFacultyDi
           </div>
 
           <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Updating...' : 'Save Changes'}
-            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Updating...' : 'Save Changes'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
