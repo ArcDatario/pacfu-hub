@@ -255,8 +255,29 @@ export function EditProfileDialog({ open, onOpenChange }: EditProfileDialogProps
           await deleteDoc(oldUserRef);
         }
         
+        // Delete the old Firebase Auth account (admin is still signed in)
+        const oldAuthUser = auth.currentUser;
+        if (oldAuthUser) {
+          try {
+            await oldAuthUser.delete();
+            console.log('Old auth account deleted successfully');
+          } catch (deleteError: any) {
+            console.error('Error deleting old auth account:', deleteError);
+            // If requires recent login, re-authenticate first then delete
+            if (deleteError.code === 'auth/requires-recent-login' && emailPassword) {
+              try {
+                const credential = EmailAuthProvider.credential(oldAuthUser.email!, emailPassword);
+                await reauthenticateWithCredential(oldAuthUser, credential);
+                await oldAuthUser.delete();
+                console.log('Old auth account deleted after re-auth');
+              } catch (reAuthError) {
+                console.error('Could not delete old auth account after re-auth:', reAuthError);
+              }
+            }
+          }
+        }
+        
         // Sign in with the new credentials so admin stays logged in
-        await signOut(auth);
         await login(email.trim(), emailPassword);
         
         toast.success('Profile and login email updated successfully');
