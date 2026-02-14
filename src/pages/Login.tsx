@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from '@/components/ui/input-otp';
 import { useAuth } from '@/contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import { GraduationCap, ArrowLeft, Loader2, Mail } from 'lucide-react';
+import { GraduationCap, ArrowLeft, Loader2, Mail, ShieldCheck, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -21,8 +22,18 @@ export default function Login() {
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [userName, setUserName] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpError, setOtpError] = useState('');
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,11 +93,12 @@ export default function Login() {
 
   const handleOtpVerify = async () => {
     if (otpCode.length !== 6) {
-      setError('Please enter the complete 6-digit code');
+      setOtpError('Please enter the complete 6-digit code');
       return;
     }
 
     setError('');
+    setOtpError('');
     setVerifyingCode(true);
 
     try {
@@ -111,13 +123,13 @@ export default function Login() {
             errorMsg = responseBody?.error || errorMsg;
           }
         } catch {}
-        setError(errorMsg);
+        setOtpError(errorMsg);
         setVerifyingCode(false);
         return;
       }
       
       if (!data?.success) {
-        setError(data?.error || 'Invalid verification code');
+        setOtpError(data?.error || 'Invalid verification code');
         setVerifyingCode(false);
         return;
       }
@@ -126,16 +138,19 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Error verifying code:', err);
-      setError('Failed to verify code. Please try again.');
+      setOtpError('Failed to verify code. Please try again.');
     } finally {
       setVerifyingCode(false);
     }
   };
 
   const handleResendCode = async () => {
+    if (resendCooldown > 0) return;
+    
     setSendingCode(true);
     setError('');
     setOtpCode('');
+    setOtpError('');
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('send-login-code', {
@@ -150,6 +165,7 @@ export default function Login() {
       if (!data?.success) throw new Error(data?.error || 'Failed to resend code');
 
       toast.success('New verification code sent!');
+      setResendCooldown(60); // 60 second cooldown
     } catch (err: any) {
       console.error('Error resending code:', err);
       setError('Failed to resend code. Please try again.');
@@ -162,6 +178,7 @@ export default function Login() {
     setStep('credentials');
     setOtpCode('');
     setError('');
+    setOtpError('');
   };
 
   return (
@@ -239,37 +256,48 @@ export default function Login() {
           </div>
 
           {step === 'credentials' ? (
-            <form onSubmit={handleCredentialsSubmit} className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="email">Email address</Label>
+            <form onSubmit={handleCredentialsSubmit} className="space-y-6 animate-fade-in">
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-medium">Email address</Label>
                   <Input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@psau.edu.ph"
-                    className="mt-1.5"
+                    className="h-11 transition-all focus:ring-2 focus:ring-primary/20"
+                    autoComplete="email"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="password">Password</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                    <a href="#" className="text-sm text-primary hover:underline">Forgot password?</a>
+                  </div>
                   <div className="mt-1.5">
                     <PasswordInput
                       id="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
+                      className="h-11 transition-all focus:ring-2 focus:ring-primary/20"
+                      autoComplete="current-password"
                     />
                   </div>
                 </div>
               </div>
 
               {error && (
-                <p className="text-sm text-destructive">{error}</p>
+                <p className="text-sm text-destructive animate-shake">{error}</p>
               )}
 
-              <Button type="submit" size="lg" className="w-full" disabled={isLoading || sendingCode}>
+              <Button 
+                type="submit" 
+                size="lg" 
+                className="w-full h-11 transition-all shadow-lg hover:shadow-xl" 
+                disabled={isLoading || sendingCode}
+              >
                 {isLoading ? (
                   <><Loader2 className="h-4 w-4 animate-spin mr-2" />Signing in...</>
                 ) : sendingCode ? (
@@ -278,51 +306,113 @@ export default function Login() {
                   'Sign in'
                 )}
               </Button>
+
+              {/* Footer info */}
+              <p className="text-center text-sm text-muted-foreground">
+                Faculty Portal Access • PSAU
+              </p>
             </form>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fade-in">
+              {/* Email verification icon with animation */}
               <div className="flex justify-center">
-                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Mail className="h-8 w-8 text-primary" />
+                <div className="relative">
+                  <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center animate-pulse-glow">
+                    <Mail className="h-10 w-10 text-primary" />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
+                    <ShieldCheck className="h-5 w-5 text-primary-foreground" />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-center">
-                <InputOTP
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(value) => setOtpCode(value)}
-                >
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
+              {/* Header */}
+              <div className="text-center space-y-2">
+                <h2 className="font-display text-2xl font-bold text-foreground">Verify Your Identity</h2>
+                <p className="text-muted-foreground text-sm">
+                  Enter the 6-digit code sent to
+                </p>
+                <p className="text-primary font-medium">{email}</p>
               </div>
 
-              {error && (
-                <p className="text-sm text-destructive text-center">{error}</p>
+              {/* OTP Input with better styling */}
+              <div className="flex justify-center py-4">
+                <div className="relative">
+                  <InputOTP
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(value) => {
+                      setOtpCode(value);
+                      setOtpError('');
+                    }}
+                    className="gap-3"
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                    </InputOTPGroup>
+                    <InputOTPSeparator />
+                    <InputOTPGroup>
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+              </div>
+
+              {/* Progress indicator */}
+              <div className="flex justify-center gap-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "h-2 w-2 rounded-full transition-all duration-300",
+                      i < otpCode.length
+                        ? "bg-primary w-4"
+                        : "bg-muted"
+                    )}
+                  />
+                ))}
+              </div>
+
+              {/* Error message */}
+              {(otpError || error) && (
+                <p className="text-sm text-destructive text-center animate-shake">
+                  {otpError || error}
+                </p>
               )}
 
+              {/* Verify Button */}
               <Button
                 size="lg"
-                className="w-full"
+                className={cn(
+                  "w-full transition-all duration-300",
+                  otpCode.length === 6 
+                    ? "bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25" 
+                    : ""
+                )}
                 onClick={handleOtpVerify}
                 disabled={otpCode.length !== 6 || verifyingCode}
               >
                 {verifyingCode ? (
                   <><Loader2 className="h-4 w-4 animate-spin mr-2" />Verifying...</>
-                ) : (
+                ) : otpCode.length === 6 ? (
                   'Verify & Continue'
+                ) : (
+                  'Enter 6-digit code'
                 )}
               </Button>
 
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" size="sm" onClick={handleBack}>
+              {/* Action buttons */}
+              <div className="flex items-center justify-between pt-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleBack}
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Back
                 </Button>
@@ -330,15 +420,26 @@ export default function Login() {
                   variant="ghost"
                   size="sm"
                   onClick={handleResendCode}
-                  disabled={sendingCode}
+                  disabled={sendingCode || resendCooldown > 0}
+                  className={cn(
+                    "transition-all",
+                    resendCooldown > 0 && "cursor-not-allowed opacity-60"
+                  )}
                 >
                   {sendingCode ? (
                     <><Loader2 className="h-4 w-4 animate-spin mr-1" />Sending...</>
+                  ) : resendCooldown > 0 ? (
+                    <><RefreshCw className="h-4 w-4 mr-1" />{resendCooldown}s</>
                   ) : (
-                    'Resend Code'
+                    <><RefreshCw className="h-4 w-4 mr-1" />Resend Code</>
                   )}
                 </Button>
               </div>
+
+              {/* Help text */}
+              <p className="text-center text-xs text-muted-foreground">
+                Code expires in 10 minutes. Don't have access? Contact support.
+              </p>
             </div>
           )}
         </div>
