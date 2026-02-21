@@ -4,14 +4,26 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { Textarea } from '@/components/ui/textarea';
 import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from '@/components/ui/input-otp';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import { GraduationCap, ArrowLeft, Loader2, Mail, ShieldCheck, RefreshCw } from 'lucide-react';
+import { GraduationCap, ArrowLeft, Loader2, Mail, ShieldCheck, RefreshCw, Upload, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { uploadReceipt, submitRegistration } from '@/services/registrationService';
+
+const departments = ['CAS', 'CASTech', 'CBEE', 'CFA', 'COECS', 'COED', 'CVM'];
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -26,6 +38,16 @@ export default function Login() {
   const [otpError, setOtpError] = useState('');
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Registration form state
+  const [regForm, setRegForm] = useState({
+    fullName: '',
+    department: '',
+    address: '',
+    purpose: '',
+  });
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // Resend cooldown timer
   useEffect(() => {
@@ -44,14 +66,12 @@ export default function Login() {
       return;
     }
     
-    // First validate credentials
     const result = await login(email, password);
     if (!result.success) {
       setError(result.error || 'Invalid credentials');
       return;
     }
 
-    // Get user name from Firestore
     let fetchedName = 'User';
     try {
       const currentUser = auth.currentUser;
@@ -64,16 +84,11 @@ export default function Login() {
     } catch {}
     setUserName(fetchedName);
 
-    // Credentials valid - now send verification code
     setSendingCode(true);
     
     try {
       const { data, error: fnError } = await supabase.functions.invoke('send-login-code', {
-        body: {
-          action: 'send',
-          email: email,
-          name: fetchedName,
-        },
+        body: { action: 'send', email, name: fetchedName },
       });
 
       if (fnError) throw fnError;
@@ -84,8 +99,6 @@ export default function Login() {
     } catch (err: any) {
       console.error('Error sending verification code:', err);
       setError('Failed to send verification code. Please try again.');
-      // Sign out since we can't verify
-      // The user is already signed in from the login call, but we won't redirect
     } finally {
       setSendingCode(false);
     }
@@ -103,19 +116,13 @@ export default function Login() {
 
     try {
       const response = await supabase.functions.invoke('send-login-code', {
-        body: {
-          action: 'verify',
-          email: email,
-          code: otpCode,
-        },
+        body: { action: 'verify', email, code: otpCode },
       });
 
       const data = response.data;
       const fnError = response.error;
 
-      // Handle FunctionsHttpError - parse the response body for the error message
       if (fnError) {
-        // Try to get the error message from the response context
         let errorMsg = 'Invalid verification code.';
         try {
           if (fnError.context && typeof fnError.context === 'object') {
@@ -154,18 +161,14 @@ export default function Login() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('send-login-code', {
-        body: {
-          action: 'send',
-          email: email,
-          name: userName,
-        },
+        body: { action: 'send', email, name: userName },
       });
 
       if (fnError) throw fnError;
       if (!data?.success) throw new Error(data?.error || 'Failed to resend code');
 
       toast.success('New verification code sent!');
-      setResendCooldown(60); // 60 second cooldown
+      setResendCooldown(60);
     } catch (err: any) {
       console.error('Error resending code:', err);
       setError('Failed to resend code. Please try again.');
@@ -179,6 +182,33 @@ export default function Login() {
     setOtpCode('');
     setError('');
     setOtpError('');
+  };
+
+  const handleRegistrationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!regForm.fullName || !regForm.department || !regForm.address || !regForm.purpose) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+    if (!receiptFile) {
+      toast.error('Please upload your payment receipt');
+      return;
+    }
+
+    setIsRegistering(true);
+    try {
+      const receiptUrl = await uploadReceipt(receiptFile);
+      await submitRegistration({ ...regForm, receiptUrl });
+      toast.success('Registration submitted successfully! Please wait for admin approval.');
+      setRegForm({ fullName: '', department: '', address: '', purpose: '' });
+      setReceiptFile(null);
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      toast.error(err?.message || 'Failed to submit registration');
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   return (
@@ -227,7 +257,7 @@ export default function Login() {
         <div className="absolute top-20 right-20 w-64 h-64 bg-accent/5 rounded-full blur-2xl" />
       </div>
 
-      {/* Right Panel - Login Form */}
+      {/* Right Panel - Login / Register */}
       <div className="flex-1 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center lg:text-left">
@@ -237,84 +267,11 @@ export default function Login() {
               </div>
               <span className="font-display text-2xl font-bold text-foreground">PACFU</span>
             </div>
-            
-            {step === 'credentials' ? (
-              <>
-                <h2 className="font-display text-2xl font-bold text-foreground">Welcome back</h2>
-                <p className="mt-2 text-muted-foreground">
-                  Sign in to access your PACFU portal
-                </p>
-              </>
-            ) : (
-              <>
-                <h2 className="font-display text-2xl font-bold text-foreground">Verify Your Identity</h2>
-                <p className="mt-2 text-muted-foreground">
-                  Enter the 6-digit code sent to <strong>{email}</strong>
-                </p>
-              </>
-            )}
           </div>
 
-          {step === 'credentials' ? (
-            <form onSubmit={handleCredentialsSubmit} className="space-y-6 animate-fade-in">
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-medium">Email address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@psau.edu.ph"
-                    className="h-11 transition-all focus:ring-2 focus:ring-primary/20"
-                    autoComplete="email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                    <a href="#" className="text-sm text-primary hover:underline">Forgot password?</a>
-                  </div>
-                  <div className="mt-1.5">
-                    <PasswordInput
-                      id="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="h-11 transition-all focus:ring-2 focus:ring-primary/20"
-                      autoComplete="current-password"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {error && (
-                <p className="text-sm text-destructive animate-shake">{error}</p>
-              )}
-
-              <Button 
-                type="submit" 
-                size="lg" 
-                className="w-full h-11 transition-all shadow-lg hover:shadow-xl" 
-                disabled={isLoading || sendingCode}
-              >
-                {isLoading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Signing in...</>
-                ) : sendingCode ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Sending code...</>
-                ) : (
-                  'Sign in'
-                )}
-              </Button>
-
-              {/* Footer info */}
-              <p className="text-center text-sm text-muted-foreground">
-                Faculty Portal Access • PSAU
-              </p>
-            </form>
-          ) : (
+          {step === 'otp' ? (
+            /* OTP Verification View */
             <div className="space-y-6 animate-fade-in">
-              {/* Email verification icon with animation */}
               <div className="flex justify-center">
                 <div className="relative">
                   <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center animate-pulse-glow">
@@ -326,121 +283,174 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Header */}
               <div className="text-center space-y-2">
                 <h2 className="font-display text-2xl font-bold text-foreground">Verify Your Identity</h2>
-                <p className="text-muted-foreground text-sm">
-                  Enter the 6-digit code sent to
-                </p>
+                <p className="text-muted-foreground text-sm">Enter the 6-digit code sent to</p>
                 <p className="text-primary font-medium">{email}</p>
               </div>
 
-              {/* OTP Input with better styling */}
               <div className="flex justify-center py-4">
-                <div className="relative">
-                  <InputOTP
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={(value) => {
-                      setOtpCode(value);
-                      setOtpError('');
-                    }}
-                    className="gap-3"
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                    </InputOTPGroup>
-                    <InputOTPSeparator />
-                    <InputOTPGroup>
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
+                <InputOTP maxLength={6} value={otpCode} onChange={(value) => { setOtpCode(value); setOtpError(''); }} className="gap-3">
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                  </InputOTPGroup>
+                  <InputOTPSeparator />
+                  <InputOTPGroup>
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
               </div>
 
-              {/* Progress indicator */}
               <div className="flex justify-center gap-1">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "h-2 w-2 rounded-full transition-all duration-300",
-                      i < otpCode.length
-                        ? "bg-primary w-4"
-                        : "bg-muted"
-                    )}
-                  />
+                  <div key={i} className={cn("h-2 w-2 rounded-full transition-all duration-300", i < otpCode.length ? "bg-primary w-4" : "bg-muted")} />
                 ))}
               </div>
 
-              {/* Error message */}
               {(otpError || error) && (
-                <p className="text-sm text-destructive text-center animate-shake">
-                  {otpError || error}
-                </p>
+                <p className="text-sm text-destructive text-center animate-shake">{otpError || error}</p>
               )}
 
-              {/* Verify Button */}
               <Button
                 size="lg"
-                className={cn(
-                  "w-full transition-all duration-300",
-                  otpCode.length === 6 
-                    ? "bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25" 
-                    : ""
-                )}
+                className={cn("w-full transition-all duration-300", otpCode.length === 6 && "bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25")}
                 onClick={handleOtpVerify}
                 disabled={otpCode.length !== 6 || verifyingCode}
               >
-                {verifyingCode ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Verifying...</>
-                ) : otpCode.length === 6 ? (
-                  'Verify & Continue'
-                ) : (
-                  'Enter 6-digit code'
-                )}
+                {verifyingCode ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Verifying...</> : otpCode.length === 6 ? 'Verify & Continue' : 'Enter 6-digit code'}
               </Button>
 
-              {/* Action buttons */}
               <div className="flex items-center justify-between pt-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={handleBack}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-1" />
-                  Back
+                <Button variant="ghost" size="sm" onClick={handleBack} className="text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-4 w-4 mr-1" />Back
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleResendCode}
-                  disabled={sendingCode || resendCooldown > 0}
-                  className={cn(
-                    "transition-all",
-                    resendCooldown > 0 && "cursor-not-allowed opacity-60"
-                  )}
-                >
-                  {sendingCode ? (
-                    <><Loader2 className="h-4 w-4 animate-spin mr-1" />Sending...</>
-                  ) : resendCooldown > 0 ? (
-                    <><RefreshCw className="h-4 w-4 mr-1" />{resendCooldown}s</>
-                  ) : (
-                    <><RefreshCw className="h-4 w-4 mr-1" />Resend Code</>
-                  )}
+                <Button variant="ghost" size="sm" onClick={handleResendCode} disabled={sendingCode || resendCooldown > 0} className={cn("transition-all", resendCooldown > 0 && "cursor-not-allowed opacity-60")}>
+                  {sendingCode ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Sending...</> : resendCooldown > 0 ? <><RefreshCw className="h-4 w-4 mr-1" />{resendCooldown}s</> : <><RefreshCw className="h-4 w-4 mr-1" />Resend Code</>}
                 </Button>
               </div>
 
-              {/* Help text */}
               <p className="text-center text-xs text-muted-foreground">
                 Code expires in 10 minutes. Don't have access? Contact support.
               </p>
             </div>
+          ) : (
+            /* Login + Register Tabs */
+            <Tabs defaultValue="login" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Sign In</TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+              </TabsList>
+
+              {/* Login Tab */}
+              <TabsContent value="login">
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <h2 className="font-display text-2xl font-bold text-foreground">Welcome back</h2>
+                    <p className="mt-1 text-muted-foreground text-sm">Sign in to access your PACFU portal</p>
+                  </div>
+
+                  <form onSubmit={handleCredentialsSubmit} className="space-y-5 animate-fade-in">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email address</Label>
+                      <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@psau.edu.ph" className="h-11" autoComplete="email" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password">Password</Label>
+                        <a href="#" className="text-sm text-primary hover:underline">Forgot password?</a>
+                      </div>
+                      <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" className="h-11" autoComplete="current-password" />
+                    </div>
+
+                    {error && <p className="text-sm text-destructive animate-shake">{error}</p>}
+
+                    <Button type="submit" size="lg" className="w-full h-11 shadow-lg hover:shadow-xl" disabled={isLoading || sendingCode}>
+                      {isLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Signing in...</> : sendingCode ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Sending code...</> : 'Sign in'}
+                    </Button>
+
+                    <p className="text-center text-sm text-muted-foreground">Faculty Portal Access • PSAU</p>
+                  </form>
+                </div>
+              </TabsContent>
+
+              {/* Register Tab */}
+              <TabsContent value="register">
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <h2 className="font-display text-2xl font-bold text-foreground">Join PACFU</h2>
+                    <p className="mt-1 text-muted-foreground text-sm">Submit your membership application</p>
+                  </div>
+
+                  <form onSubmit={handleRegistrationSubmit} className="space-y-4 animate-fade-in">
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-name">Full Name *</Label>
+                      <Input id="reg-name" placeholder="Juan Dela Cruz" value={regForm.fullName} onChange={(e) => setRegForm(p => ({ ...p, fullName: e.target.value }))} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-dept">Department *</Label>
+                      <Select value={regForm.department} onValueChange={(v) => setRegForm(p => ({ ...p, department: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                        <SelectContent>
+                          {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-address">Address *</Label>
+                      <Input id="reg-address" placeholder="Your complete address" value={regForm.address} onChange={(e) => setRegForm(p => ({ ...p, address: e.target.value }))} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-purpose">Purpose of Joining *</Label>
+                      <Textarea id="reg-purpose" placeholder="Why do you want to join PACFU?" value={regForm.purpose} onChange={(e) => setRegForm(p => ({ ...p, purpose: e.target.value }))} rows={3} />
+                    </div>
+
+                    {/* Payment Info */}
+                    <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-5 w-5 text-primary" />
+                        <h3 className="font-semibold text-foreground">Registration Fee: ₱500</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Please transfer to this account:</p>
+                      <div className="space-y-1 text-sm">
+                        <p className="text-foreground"><span className="font-medium">GCash:</span> 09123456789</p>
+                        <p className="text-foreground"><span className="font-medium">PayMaya:</span> 09123456789</p>
+                        <p className="text-foreground"><span className="font-medium">GrabPay:</span> 09123456789</p>
+                      </div>
+                    </div>
+
+                    {/* Receipt Upload */}
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-receipt">Upload Payment Receipt *</Label>
+                      <div className="relative">
+                        <Input
+                          id="reg-receipt"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                          className="h-11"
+                        />
+                      </div>
+                      {receiptFile && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Upload className="h-3 w-3" /> {receiptFile.name}
+                        </p>
+                      )}
+                    </div>
+
+                    <Button type="submit" size="lg" className="w-full h-11 shadow-lg hover:shadow-xl" disabled={isRegistering}>
+                      {isRegistering ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Submitting...</> : 'Submit Registration'}
+                    </Button>
+                  </form>
+                </div>
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       </div>
