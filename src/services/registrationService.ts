@@ -1,15 +1,3 @@
-import {
-  collection,
-  addDoc,
-  getDocs,
-  doc,
-  updateDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { Registration } from '@/types/registration';
 
@@ -42,88 +30,90 @@ export const submitRegistration = async (data: {
   purpose: string;
   receiptUrl: string;
 }): Promise<void> => {
-  await addDoc(collection(db, 'registrations'), {
-    ...data,
+  const { error } = await supabase.from('registrations').insert({
+    full_name: data.fullName,
+    email: data.email,
+    phone: data.phone,
+    department: data.department,
+    address: data.address,
+    purpose: data.purpose,
+    receipt_url: data.receiptUrl,
     status: 'pending',
-    createdAt: serverTimestamp(),
   });
+
+  if (error) throw new Error('Failed to submit registration: ' + error.message);
 };
 
-// Subscribe to all registrations (admin)
+// Subscribe to all registrations (admin) using polling
 export const subscribeRegistrations = (callback: (registrations: Registration[]) => void) => {
-  const q = query(collection(db, 'registrations'), orderBy('createdAt', 'desc'));
+  const fetchRegistrations = async () => {
+    const { data, error } = await supabase
+      .from('registrations')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  return onSnapshot(q, (snapshot) => {
-    const registrations = snapshot.docs.map((docSnap) => {
-      const d = docSnap.data();
-      return {
-        id: docSnap.id,
-        fullName: d.fullName,
-        email: d.email || '',
-        phone: d.phone || '',
-        department: d.department,
-        address: d.address,
-        purpose: d.purpose,
-        receiptUrl: d.receiptUrl,
-        status: d.status,
-        createdAt: d.createdAt?.toDate() || new Date(),
-        approvedAt: d.approvedAt?.toDate(),
-        approvedBy: d.approvedBy,
-        accountEmail: d.accountEmail,
-      } as Registration;
-    });
+    if (error) {
+      console.error('Error fetching registrations:', error);
+      return;
+    }
+
+    const registrations: Registration[] = (data || []).map((r: any) => ({
+      id: r.id,
+      fullName: r.full_name,
+      email: r.email || '',
+      phone: r.phone || '',
+      department: r.department,
+      address: r.address,
+      purpose: r.purpose,
+      receiptUrl: r.receipt_url,
+      status: r.status,
+      createdAt: new Date(r.created_at),
+      approvedAt: r.approved_at ? new Date(r.approved_at) : undefined,
+      approvedBy: r.approved_by,
+      accountEmail: r.account_email,
+    }));
+
     callback(registrations);
-  }, (error) => {
-    console.error('Error subscribing to registrations:', error);
-    // Fallback without orderBy if index missing
-    const fallbackQ = query(collection(db, 'registrations'));
-    onSnapshot(fallbackQ, (snap) => {
-      const regs = snap.docs.map((docSnap) => {
-        const d = docSnap.data();
-        return {
-          id: docSnap.id,
-        fullName: d.fullName,
-        email: d.email || '',
-        phone: d.phone || '',
-        department: d.department,
-        address: d.address,
-        purpose: d.purpose,
-        receiptUrl: d.receiptUrl,
-        status: d.status,
-        createdAt: d.createdAt?.toDate() || new Date(),
-        approvedAt: d.approvedAt?.toDate(),
-        approvedBy: d.approvedBy,
-        accountEmail: d.accountEmail,
-      } as Registration;
-      });
-      regs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      callback(regs);
-    });
-  });
+  };
+
+  // Initial fetch
+  fetchRegistrations();
+
+  // Poll every 5 seconds
+  const interval = setInterval(fetchRegistrations, 5000);
+
+  // Return unsubscribe function
+  return () => clearInterval(interval);
 };
 
 // Approve registration
 export const approveRegistration = async (id: string, adminId: string): Promise<void> => {
-  await updateDoc(doc(db, 'registrations', id), {
+  const { error } = await supabase.from('registrations').update({
     status: 'approved',
-    approvedAt: serverTimestamp(),
-    approvedBy: adminId,
-  });
+    approved_at: new Date().toISOString(),
+    approved_by: adminId,
+  }).eq('id', id);
+
+  if (error) throw new Error('Failed to approve registration: ' + error.message);
 };
 
 // Reject registration
 export const rejectRegistration = async (id: string): Promise<void> => {
-  await updateDoc(doc(db, 'registrations', id), {
+  const { error } = await supabase.from('registrations').update({
     status: 'rejected',
-  });
+  }).eq('id', id);
+
+  if (error) throw new Error('Failed to reject registration: ' + error.message);
 };
 
 // Mark registration as completed with account email
 export const completeRegistration = async (id: string, email: string): Promise<void> => {
-  await updateDoc(doc(db, 'registrations', id), {
+  const { error } = await supabase.from('registrations').update({
     status: 'completed',
-    accountEmail: email,
-  });
+    account_email: email,
+  }).eq('id', id);
+
+  if (error) throw new Error('Failed to complete registration: ' + error.message);
 };
 
 // Send credentials email via edge function
