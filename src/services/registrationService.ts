@@ -35,6 +35,8 @@ export const uploadReceipt = async (file: File): Promise<string> => {
 // Submit a new registration
 export const submitRegistration = async (data: {
   fullName: string;
+  email: string;
+  phone: string;
   department: string;
   address: string;
   purpose: string;
@@ -57,6 +59,8 @@ export const subscribeRegistrations = (callback: (registrations: Registration[])
       return {
         id: docSnap.id,
         fullName: d.fullName,
+        email: d.email || '',
+        phone: d.phone || '',
         department: d.department,
         address: d.address,
         purpose: d.purpose,
@@ -78,17 +82,19 @@ export const subscribeRegistrations = (callback: (registrations: Registration[])
         const d = docSnap.data();
         return {
           id: docSnap.id,
-          fullName: d.fullName,
-          department: d.department,
-          address: d.address,
-          purpose: d.purpose,
-          receiptUrl: d.receiptUrl,
-          status: d.status,
-          createdAt: d.createdAt?.toDate() || new Date(),
-          approvedAt: d.approvedAt?.toDate(),
-          approvedBy: d.approvedBy,
-          accountEmail: d.accountEmail,
-        } as Registration;
+        fullName: d.fullName,
+        email: d.email || '',
+        phone: d.phone || '',
+        department: d.department,
+        address: d.address,
+        purpose: d.purpose,
+        receiptUrl: d.receiptUrl,
+        status: d.status,
+        createdAt: d.createdAt?.toDate() || new Date(),
+        approvedAt: d.approvedAt?.toDate(),
+        approvedBy: d.approvedBy,
+        accountEmail: d.accountEmail,
+      } as Registration;
       });
       regs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       callback(regs);
