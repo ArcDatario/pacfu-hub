@@ -18,7 +18,6 @@ import Faculty from "./pages/Faculty";
 import Messages from "./pages/Messages";
 import Finance from "./pages/Finance";
 import Logs from "./pages/Logs";
-import Registrations from "./pages/Registrations";
 import SharedFile from "./pages/SharedFile";
 import NotFound from "./pages/NotFound";
 
@@ -46,7 +45,6 @@ const App = () => (
                 <Route path="/faculty" element={<Faculty />} />
                 <Route path="/finance" element={<Finance />} />
                 <Route path="/logs" element={<Logs />} />
-                <Route path="/registrations" element={<Registrations />} />
                 <Route path="/share/:token" element={<SharedFile />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

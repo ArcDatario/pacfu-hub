@@ -8,6 +8,3 @@ verify_jwt = false
 
 [functions.delete-firebase-user]
 verify_jwt = false
-
-[functions.send-credentials-email]
-verify_jwt = false

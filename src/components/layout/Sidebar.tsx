@@ -17,8 +17,7 @@ import {
   FolderOpen,
   Edit2,
   Menu,
-  X,
-  ClipboardList
+  X
 } from 'lucide-react';
 import { EditProfileDialog } from '@/components/profile/EditProfileDialog';
 
@@ -38,7 +37,6 @@ const navItems: NavItem[] = [
   { label: 'Elections', href: '/elections', icon: Vote },
   { label: 'Faculty Members', href: '/faculty', icon: Users, adminOnly: true },
   { label: 'Financial Records', href: '/finance', icon: DollarSign, adminOnly: true },
-  { label: 'Registrations', href: '/registrations', icon: ClipboardList, adminOnly: true },
   { label: 'Activity Logs', href: '/logs', icon: FileText, adminOnly: true },
 ];
 
