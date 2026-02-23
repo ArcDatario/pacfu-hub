@@ -42,8 +42,6 @@ export default function Login() {
   // Registration form state
   const [regForm, setRegForm] = useState({
     fullName: '',
-    email: '',
-    phone: '',
     department: '',
     address: '',
     purpose: '',
@@ -189,7 +187,7 @@ export default function Login() {
   const handleRegistrationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!regForm.fullName || !regForm.email || !regForm.phone || !regForm.department || !regForm.address || !regForm.purpose) {
+    if (!regForm.fullName || !regForm.department || !regForm.address || !regForm.purpose) {
       toast.error('Please fill in all fields');
       return;
     }
@@ -203,7 +201,7 @@ export default function Login() {
       const receiptUrl = await uploadReceipt(receiptFile);
       await submitRegistration({ ...regForm, receiptUrl });
       toast.success('Registration submitted successfully! Please wait for admin approval.');
-      setRegForm({ fullName: '', email: '', phone: '', department: '', address: '', purpose: '' });
+      setRegForm({ fullName: '', department: '', address: '', purpose: '' });
       setReceiptFile(null);
     } catch (err: any) {
       console.error('Registration error:', err);
@@ -391,17 +389,6 @@ export default function Login() {
                     <div className="space-y-2">
                       <Label htmlFor="reg-name">Full Name *</Label>
                       <Input id="reg-name" placeholder="Juan Dela Cruz" value={regForm.fullName} onChange={(e) => setRegForm(p => ({ ...p, fullName: e.target.value }))} />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="reg-email">Email *</Label>
-                        <Input id="reg-email" type="email" placeholder="you@email.com" value={regForm.email} onChange={(e) => setRegForm(p => ({ ...p, email: e.target.value }))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="reg-phone">Phone *</Label>
-                        <Input id="reg-phone" type="tel" placeholder="09XXXXXXXXX" value={regForm.phone} onChange={(e) => setRegForm(p => ({ ...p, phone: e.target.value }))} />
-                      </div>
                     </div>
 
                     <div className="space-y-2">

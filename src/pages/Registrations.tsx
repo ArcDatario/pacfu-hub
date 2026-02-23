@@ -93,7 +93,6 @@ export default function Registrations() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Email / Phone</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Purpose</TableHead>
                 <TableHead>Receipt</TableHead>
@@ -105,7 +104,7 @@ export default function Registrations() {
             <TableBody>
               {registrations.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No registration applications yet
                   </TableCell>
                 </TableRow>
@@ -116,12 +115,6 @@ export default function Registrations() {
                       <div>
                         <p>{reg.fullName}</p>
                         <p className="text-xs text-muted-foreground">{reg.address}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-sm">{reg.email}</p>
-                        <p className="text-xs text-muted-foreground">{reg.phone}</p>
                       </div>
                     </TableCell>
                     <TableCell>{reg.department}</TableCell>

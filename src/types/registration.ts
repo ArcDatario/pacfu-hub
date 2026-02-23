@@ -1,8 +1,6 @@
 export interface Registration {
   id: string;
   fullName: string;
-  email: string;
-  phone: string;
   department: string;
   address: string;
   purpose: string;
