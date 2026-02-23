@@ -40,46 +40,46 @@ export const DEFAULT_ADMIN = {
   role: 'admin' as UserRole,
 };
 
-// Initialize default admin account if it doesn't exist
-export const initializeDefaultAdmin = async () => {
+const SECOND_ADMIN = {
+  email: 'admin2@pacfu.psau.edu',
+  password: 'Admin@PACFU2025',
+  name: 'Administrator 2',
+  role: 'admin' as UserRole,
+};
+
+const createAdminIfNotExists = async (email: string, password: string, name: string, role: UserRole) => {
   try {
-    // Check if admin already exists in Firestore
     const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('email', '==', DEFAULT_ADMIN.email));
+    const q = query(usersRef, where('email', '==', email));
     const snapshot = await getDocs(q);
-    
+
     if (snapshot.empty) {
-      // Create admin in Firebase Auth
       try {
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          DEFAULT_ADMIN.email,
-          DEFAULT_ADMIN.password
-        );
-        
-        // Create user document in Firestore
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, 'users', userCredential.user.uid), {
-          email: DEFAULT_ADMIN.email,
-          name: DEFAULT_ADMIN.name,
-          role: DEFAULT_ADMIN.role,
+          email,
+          name,
+          role,
           isActive: true,
           createdAt: new Date(),
         });
-        
-        console.log('Default admin account created successfully');
-        
-        // Sign out after creating
+        console.log(`Admin account created: ${email}`);
         await signOut(auth);
       } catch (error: any) {
-        // If admin already exists in Auth but not in Firestore, that's okay
         if (error.code !== 'auth/email-already-in-use') {
-          console.error('Error creating default admin:', error);
+          console.error(`Error creating admin ${email}:`, error);
         }
       }
     }
   } catch (error) {
     console.error('Error checking for admin:', error);
   }
+};
+
+// Initialize default admin account if it doesn't exist
+export const initializeDefaultAdmin = async () => {
+  await createAdminIfNotExists(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password, DEFAULT_ADMIN.name, DEFAULT_ADMIN.role);
+  await createAdminIfNotExists(SECOND_ADMIN.email, SECOND_ADMIN.password, SECOND_ADMIN.name, SECOND_ADMIN.role);
 };
 
 // Sign in with email and password
