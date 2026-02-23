@@ -22,7 +22,6 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { uploadReceipt, submitRegistration } from '@/services/registrationService';
-import { DEFAULT_ADMIN } from '@/services/authService';
 
 const departments = ['CAS', 'CASTech', 'CBEE', 'CFA', 'COECS', 'COED', 'CVM'];
 
@@ -363,7 +362,15 @@ export default function Login() {
                     size="sm"
                     className="w-full border-dashed border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/20 text-xs"
                     onClick={async () => {
-                      const result = await login(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password);
+                      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@pacfu.psau.edu';
+                      const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+                      if (!adminPassword) {
+                        toast.error('VITE_ADMIN_PASSWORD not set in environment');
+                        return;
+                      }
+                      setEmail(adminEmail);
+                      setPassword(adminPassword);
+                      const result = await login(adminEmail, adminPassword);
                       if (result.success) {
                         navigate('/dashboard');
                       } else {
