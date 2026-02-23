@@ -355,33 +355,6 @@ export default function Login() {
                     <p className="mt-1 text-muted-foreground text-sm">Sign in to access your PACFU portal</p>
                   </div>
 
-                  {/* Dev bypass button */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full border-dashed border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/20 text-xs"
-                    onClick={async () => {
-                      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@pacfu.psau.edu';
-                      const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
-                      if (!adminPassword) {
-                        toast.error('VITE_ADMIN_PASSWORD not set in environment');
-                        return;
-                      }
-                      setEmail(adminEmail);
-                      setPassword(adminPassword);
-                      const result = await login(adminEmail, adminPassword);
-                      if (result.success) {
-                        navigate('/dashboard');
-                      } else {
-                        toast.error(result.error || 'Admin login failed');
-                      }
-                    }}
-                    disabled={isLoading}
-                  >
-                    🔧 Continue as Admin (Dev)
-                  </Button>
-
                   <form onSubmit={handleCredentialsSubmit} className="space-y-5 animate-fade-in">
                     <div className="space-y-2">
                       <Label htmlFor="email">Email address</Label>
