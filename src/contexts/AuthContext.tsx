@@ -59,21 +59,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               isLoading: false,
             });
           } else {
-            // userData is null - could be permissions issue, don't force logout
-            // Just mark as not loading so the app doesn't hang
+            // userData is null - doc missing, don't force logout
             setAuthState(prev => prev.isAuthenticated ? prev : {
               user: null,
               isAuthenticated: false,
               isLoading: false,
             });
           }
-        } catch (error) {
-          console.error('Error in auth state change:', error);
-          setAuthState(prev => prev.isAuthenticated ? prev : {
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-          });
+        } catch (error: any) {
+          // permission-denied means Firestore rules blocked us, but user IS authenticated
+          // Keep existing state if authenticated, otherwise just stop loading
+          if (error?.code === 'permission-denied') {
+            setAuthState(prev => prev.isAuthenticated ? { ...prev, isLoading: false } : {
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+          } else {
+            console.error('Error in auth state change:', error);
+            setAuthState(prev => prev.isAuthenticated ? prev : {
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+          }
         }
       } else {
         setAuthState({
