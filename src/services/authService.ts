@@ -51,28 +51,14 @@ const createAdminIfNotExists = async (adminConfig: typeof DEFAULT_ADMIN) => {
       createdAt: new Date(),
     });
     console.log(`Admin account created: ${adminConfig.email}`);
+    // Sign out immediately - we don't want to stay signed in during initialization
     await signOut(auth);
   } catch (error: any) {
     if (error.code !== 'auth/email-already-in-use') {
       console.error(`Error creating admin ${adminConfig.email}:`, error);
     }
-    // If already exists in Auth, try to ensure Firestore doc exists too
-    if (error.code === 'auth/email-already-in-use') {
-      try {
-        const cred = await signInWithEmailAndPassword(auth, adminConfig.email, adminConfig.password);
-        const userDoc = await getDoc(doc(db, 'users', cred.user.uid));
-        if (!userDoc.exists()) {
-          await setDoc(doc(db, 'users', cred.user.uid), {
-            email: adminConfig.email,
-            name: adminConfig.name,
-            role: adminConfig.role,
-            isActive: true,
-            createdAt: new Date(),
-          });
-        }
-        await signOut(auth);
-      } catch {}
-    }
+    // If email already exists, the account is already set up - do nothing
+    // We do NOT sign in here to avoid interfering with the auth state listener
   }
 };
 

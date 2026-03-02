@@ -59,30 +59,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               isLoading: false,
             });
           } else {
-            // userData is null - doc missing, don't force logout
-            setAuthState(prev => prev.isAuthenticated ? prev : {
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
+            // userData is null - doc missing
+            // If already authenticated (set by login fn), preserve state
+            setAuthState(prev => {
+              if (prev.isAuthenticated) return { ...prev, isLoading: false };
+              return { user: null, isAuthenticated: false, isLoading: false };
             });
           }
         } catch (error: any) {
-          // permission-denied means Firestore rules blocked us, but user IS authenticated
-          // Keep existing state if authenticated, otherwise just stop loading
-          if (error?.code === 'permission-denied') {
-            setAuthState(prev => prev.isAuthenticated ? { ...prev, isLoading: false } : {
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
-          } else {
-            console.error('Error in auth state change:', error);
-            setAuthState(prev => prev.isAuthenticated ? prev : {
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
-          }
+          // Any Firestore error (permission-denied, etc.) - never wipe authenticated state
+          console.warn('getUserData error in onAuthChange:', error?.code);
+          setAuthState(prev => ({ ...prev, isLoading: false }));
         }
       } else {
         setAuthState({
@@ -117,10 +104,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthState((prev) => ({ ...prev, isLoading: false }));
       return { success: false, error: result.error || 'Login failed' };
     } finally {
-      // Re-enable onAuthChange after a short delay to let it settle
+      // Re-enable onAuthChange after a longer delay to allow navigation to complete
       setTimeout(() => {
         loginInProgressRef.current = false;
-      }, 2000);
+      }, 5000);
     }
   };
 
