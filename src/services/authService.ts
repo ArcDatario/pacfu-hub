@@ -21,65 +21,65 @@ import {
 import { auth, db, firebaseConfig } from '@/lib/firebase';
 import { User, UserRole } from '@/types/auth';
 
-// Default admin account - will be created on first app load
-// SECURITY: Password should be changed immediately after first login
-// The random password ensures the account isn't accessible with default credentials
-const generateSecurePassword = (): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-  let password = '';
-  for (let i = 0; i < 24; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-};
-
+// Default admin credentials - fixed so they are always accessible
 export const DEFAULT_ADMIN = {
-  email: import.meta.env.VITE_ADMIN_EMAIL || 'admin@pacfu.psau.edu',
-  password: import.meta.env.VITE_ADMIN_PASSWORD || generateSecurePassword(),
-  name: import.meta.env.VITE_ADMIN_NAME || 'System Administrator',
+  email: 'admin@pacfu.psau.edu',
+  password: 'Admin@PACFU2025!',
+  name: 'System Administrator',
   role: 'admin' as UserRole,
 };
 
-// Initialize default admin account if it doesn't exist
-export const initializeDefaultAdmin = async () => {
+export const DEFAULT_ADMIN_2 = {
+  email: 'admin2@pacfu.psau.edu',
+  password: 'Admin@PACFU2025',
+  name: 'Administrator 2',
+  role: 'admin' as UserRole,
+};
+
+const createAdminIfNotExists = async (adminConfig: typeof DEFAULT_ADMIN) => {
   try {
-    // Check if admin already exists in Firestore
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('email', '==', DEFAULT_ADMIN.email));
-    const snapshot = await getDocs(q);
-    
-    if (snapshot.empty) {
-      // Create admin in Firebase Auth
-      try {
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          DEFAULT_ADMIN.email,
-          DEFAULT_ADMIN.password
-        );
-        
-        // Create user document in Firestore
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          email: DEFAULT_ADMIN.email,
-          name: DEFAULT_ADMIN.name,
-          role: DEFAULT_ADMIN.role,
-          isActive: true,
-          createdAt: new Date(),
-        });
-        
-        console.log('Default admin account created successfully');
-        
-        // Sign out after creating
-        await signOut(auth);
-      } catch (error: any) {
-        // If admin already exists in Auth but not in Firestore, that's okay
-        if (error.code !== 'auth/email-already-in-use') {
-          console.error('Error creating default admin:', error);
-        }
-      }
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      adminConfig.email,
+      adminConfig.password
+    );
+    await setDoc(doc(db, 'users', userCredential.user.uid), {
+      email: adminConfig.email,
+      name: adminConfig.name,
+      role: adminConfig.role,
+      isActive: true,
+      createdAt: new Date(),
+    });
+    console.log(`Admin account created: ${adminConfig.email}`);
+    await signOut(auth);
+  } catch (error: any) {
+    if (error.code !== 'auth/email-already-in-use') {
+      console.error(`Error creating admin ${adminConfig.email}:`, error);
     }
-  } catch (error) {
-    console.error('Error checking for admin:', error);
+    // If already exists in Auth, try to ensure Firestore doc exists too
+    if (error.code === 'auth/email-already-in-use') {
+      try {
+        const cred = await signInWithEmailAndPassword(auth, adminConfig.email, adminConfig.password);
+        const userDoc = await getDoc(doc(db, 'users', cred.user.uid));
+        if (!userDoc.exists()) {
+          await setDoc(doc(db, 'users', cred.user.uid), {
+            email: adminConfig.email,
+            name: adminConfig.name,
+            role: adminConfig.role,
+            isActive: true,
+            createdAt: new Date(),
+          });
+        }
+        await signOut(auth);
+      } catch {}
+    }
   }
+};
+
+// Initialize default admin accounts if they don't exist
+export const initializeDefaultAdmin = async () => {
+  await createAdminIfNotExists(DEFAULT_ADMIN);
+  await createAdminIfNotExists(DEFAULT_ADMIN_2);
 };
 
 // Sign in with email and password
@@ -88,15 +88,38 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const firebaseUser = userCredential.user;
     
-    // Get user data from Firestore
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-    
-    if (!userDoc.exists()) {
-      await signOut(auth);
-      return { user: null, error: 'User account not found in database' };
+    // Try to get user data from Firestore
+    let userData: any = null;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+      if (userDoc.exists()) {
+        userData = userDoc.data();
+      }
+    } catch (firestoreError: any) {
+      console.warn('Firestore read failed, using fallback for known admins:', firestoreError.code);
     }
-    
-    const userData = userDoc.data();
+
+    // If Firestore failed or doc missing, fall back for known admin accounts
+    if (!userData) {
+      const isKnownAdmin = 
+        email === DEFAULT_ADMIN.email || 
+        email === DEFAULT_ADMIN_2.email;
+
+      if (isKnownAdmin) {
+        const user: User = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email || email,
+          name: email === DEFAULT_ADMIN.email ? DEFAULT_ADMIN.name : DEFAULT_ADMIN_2.name,
+          role: 'admin',
+          isActive: true,
+          createdAt: new Date(),
+        };
+        return { user, error: null };
+      }
+      
+      await signOut(auth);
+      return { user: null, error: 'User account not found. Please contact the administrator.' };
+    }
     
     if (!userData.isActive) {
       await signOut(auth);
