@@ -90,55 +90,68 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
     
     // Try to get user data from Firestore
     let userData: any = null;
+    let firestoreError: any = null;
     try {
       const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
       if (userDoc.exists()) {
         userData = userDoc.data();
       }
-    } catch (firestoreError: any) {
-      console.warn('Firestore read failed, using fallback for known admins:', firestoreError.code);
+    } catch (err: any) {
+      firestoreError = err;
+      console.warn('Firestore read failed:', err.code);
     }
 
-    // If Firestore failed or doc missing, fall back for known admin accounts
-    if (!userData) {
-      const isKnownAdmin = 
-        email === DEFAULT_ADMIN.email || 
-        email === DEFAULT_ADMIN_2.email;
-
-      if (isKnownAdmin) {
-        const user: User = {
-          id: firebaseUser.uid,
-          email: firebaseUser.email || email,
-          name: email === DEFAULT_ADMIN.email ? DEFAULT_ADMIN.name : DEFAULT_ADMIN_2.name,
-          role: 'admin',
-          isActive: true,
-          createdAt: new Date(),
-        };
-        return { user, error: null };
+    // If Firestore succeeded and user data exists
+    if (userData) {
+      if (!userData.isActive) {
+        await signOut(auth);
+        return { user: null, error: 'Your account has been deactivated. Please contact the admin.' };
       }
       
-      await signOut(auth);
-      return { user: null, error: 'User account not found. Please contact the administrator.' };
+      const user: User = {
+        id: firebaseUser.uid,
+        email: userData.email || firebaseUser.email || email,
+        name: userData.name,
+        role: userData.role,
+        avatar: userData.avatar || undefined,
+        isActive: userData.isActive,
+        department: userData.department || undefined,
+        groups: userData.groups || [],
+        createdAt: userData.createdAt?.toDate() || new Date(),
+      };
+      return { user, error: null };
+    }
+
+    // Firestore failed or document missing - build user from Firebase Auth + known info
+    // This handles Firestore permission-denied errors gracefully
+    const isKnownAdmin = email === DEFAULT_ADMIN.email || email === DEFAULT_ADMIN_2.email;
+    
+    if (isKnownAdmin || firestoreError?.code === 'permission-denied') {
+      // For admins: use known data. For faculty with permission issues: use email as name fallback
+      const adminName = email === DEFAULT_ADMIN.email 
+        ? DEFAULT_ADMIN.name 
+        : email === DEFAULT_ADMIN_2.email 
+          ? DEFAULT_ADMIN_2.name 
+          : firebaseUser.email?.split('@')[0] || 'User';
+      
+      const role: UserRole = isKnownAdmin ? 'admin' : 'faculty';
+      
+      const user: User = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email || email,
+        name: adminName,
+        role,
+        isActive: true,
+        createdAt: new Date(),
+        groups: [],
+      };
+      return { user, error: null };
     }
     
-    if (!userData.isActive) {
-      await signOut(auth);
-      return { user: null, error: 'Your account has been deactivated. Please contact the admin.' };
-    }
-    
-    const user: User = {
-      id: firebaseUser.uid,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role,
-      avatar: userData.avatar || undefined,
-      isActive: userData.isActive,
-      department: userData.department || undefined,
-      groups: userData.groups || [],
-      createdAt: userData.createdAt?.toDate() || new Date(),
-    };
-    
-    return { user, error: null };
+    // Firestore doc simply doesn't exist for this user
+    await signOut(auth);
+    return { user: null, error: 'User account not found. Please contact the administrator.' };
+
   } catch (error: any) {
     console.error('Login error:', error);
     
@@ -174,11 +187,10 @@ export const onAuthChange = (callback: (user: FirebaseUser | null) => void) => {
 // Get user data from Firestore (with fresh fetch)
 export const getUserData = async (uid: string): Promise<User | null> => {
   try {
-    // Force a fresh fetch from Firestore
     const userDoc = await getDoc(doc(db, 'users', uid));
     
     if (!userDoc.exists()) {
-      console.log('User document does not exist');
+      console.log('User document does not exist for uid:', uid);
       return null;
     }
     
@@ -196,10 +208,13 @@ export const getUserData = async (uid: string): Promise<User | null> => {
       createdAt: data.createdAt?.toDate() || new Date(),
     };
     
-    console.log('Fetched user data:', user);
-    
     return user;
-  } catch (error) {
+  } catch (error: any) {
+    // If permission-denied, return a sentinel so caller knows NOT to log out
+    if (error?.code === 'permission-denied') {
+      console.warn('Firestore permission-denied for getUserData - keeping existing auth state');
+      throw error; // Re-throw so AuthContext can handle it without logging out
+    }
     console.error('Error getting user data:', error);
     return null;
   }
