@@ -21,51 +21,65 @@ import {
 import { auth, db, firebaseConfig } from '@/lib/firebase';
 import { User, UserRole } from '@/types/auth';
 
-// Default admin credentials - fixed so they are always accessible
-export const DEFAULT_ADMIN = {
-  email: 'admin@pacfu.psau.edu',
-  password: 'Admin@PACFU2025!',
-  name: 'System Administrator',
-  role: 'admin' as UserRole,
-};
-
-export const DEFAULT_ADMIN_2 = {
-  email: 'admin2@pacfu.psau.edu',
-  password: 'Admin@PACFU2025',
-  name: 'Administrator 2',
-  role: 'admin' as UserRole,
-};
-
-const createAdminIfNotExists = async (adminConfig: typeof DEFAULT_ADMIN) => {
-  try {
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      adminConfig.email,
-      adminConfig.password
-    );
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      email: adminConfig.email,
-      name: adminConfig.name,
-      role: adminConfig.role,
-      isActive: true,
-      createdAt: new Date(),
-    });
-    console.log(`Admin account created: ${adminConfig.email}`);
-    // Sign out immediately - we don't want to stay signed in during initialization
-    await signOut(auth);
-  } catch (error: any) {
-    if (error.code !== 'auth/email-already-in-use') {
-      console.error(`Error creating admin ${adminConfig.email}:`, error);
-    }
-    // If email already exists, the account is already set up - do nothing
-    // We do NOT sign in here to avoid interfering with the auth state listener
+// Default admin account - will be created on first app load
+// SECURITY: Password should be changed immediately after first login
+// The random password ensures the account isn't accessible with default credentials
+const generateSecurePassword = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < 24; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
   }
+  return password;
 };
 
-// Initialize default admin accounts if they don't exist
+export const DEFAULT_ADMIN = {
+  email: import.meta.env.VITE_ADMIN_EMAIL || 'admin@pacfu.psau.edu',
+  password: import.meta.env.VITE_ADMIN_PASSWORD || generateSecurePassword(),
+  name: import.meta.env.VITE_ADMIN_NAME || 'System Administrator',
+  role: 'admin' as UserRole,
+};
+
+// Initialize default admin account if it doesn't exist
 export const initializeDefaultAdmin = async () => {
-  await createAdminIfNotExists(DEFAULT_ADMIN);
-  await createAdminIfNotExists(DEFAULT_ADMIN_2);
+  try {
+    // Check if admin already exists in Firestore
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('email', '==', DEFAULT_ADMIN.email));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      // Create admin in Firebase Auth
+      try {
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          DEFAULT_ADMIN.email,
+          DEFAULT_ADMIN.password
+        );
+        
+        // Create user document in Firestore
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          email: DEFAULT_ADMIN.email,
+          name: DEFAULT_ADMIN.name,
+          role: DEFAULT_ADMIN.role,
+          isActive: true,
+          createdAt: new Date(),
+        });
+        
+        console.log('Default admin account created successfully');
+        
+        // Sign out after creating
+        await signOut(auth);
+      } catch (error: any) {
+        // If admin already exists in Auth but not in Firestore, that's okay
+        if (error.code !== 'auth/email-already-in-use') {
+          console.error('Error creating default admin:', error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error checking for admin:', error);
+  }
 };
 
 // Sign in with email and password
@@ -74,70 +88,34 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const firebaseUser = userCredential.user;
     
-    // Try to get user data from Firestore
-    let userData: any = null;
-    let firestoreError: any = null;
-    try {
-      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-      if (userDoc.exists()) {
-        userData = userDoc.data();
-      }
-    } catch (err: any) {
-      firestoreError = err;
-      console.warn('Firestore read failed:', err.code);
-    }
-
-    // If Firestore succeeded and user data exists
-    if (userData) {
-      if (!userData.isActive) {
-        await signOut(auth);
-        return { user: null, error: 'Your account has been deactivated. Please contact the admin.' };
-      }
-      
-      const user: User = {
-        id: firebaseUser.uid,
-        email: userData.email || firebaseUser.email || email,
-        name: userData.name,
-        role: userData.role,
-        avatar: userData.avatar || undefined,
-        isActive: userData.isActive,
-        department: userData.department || undefined,
-        groups: userData.groups || [],
-        createdAt: userData.createdAt?.toDate() || new Date(),
-      };
-      return { user, error: null };
-    }
-
-    // Firestore failed or document missing - build user from Firebase Auth + known info
-    // This handles Firestore permission-denied errors gracefully
-    const isKnownAdmin = email === DEFAULT_ADMIN.email || email === DEFAULT_ADMIN_2.email;
+    // Get user data from Firestore
+    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
     
-    if (isKnownAdmin || firestoreError?.code === 'permission-denied') {
-      // For admins: use known data. For faculty with permission issues: use email as name fallback
-      const adminName = email === DEFAULT_ADMIN.email 
-        ? DEFAULT_ADMIN.name 
-        : email === DEFAULT_ADMIN_2.email 
-          ? DEFAULT_ADMIN_2.name 
-          : firebaseUser.email?.split('@')[0] || 'User';
-      
-      const role: UserRole = isKnownAdmin ? 'admin' : 'faculty';
-      
-      const user: User = {
-        id: firebaseUser.uid,
-        email: firebaseUser.email || email,
-        name: adminName,
-        role,
-        isActive: true,
-        createdAt: new Date(),
-        groups: [],
-      };
-      return { user, error: null };
+    if (!userDoc.exists()) {
+      await signOut(auth);
+      return { user: null, error: 'User account not found in database' };
     }
     
-    // Firestore doc simply doesn't exist for this user
-    await signOut(auth);
-    return { user: null, error: 'User account not found. Please contact the administrator.' };
-
+    const userData = userDoc.data();
+    
+    if (!userData.isActive) {
+      await signOut(auth);
+      return { user: null, error: 'Your account has been deactivated. Please contact the admin.' };
+    }
+    
+    const user: User = {
+      id: firebaseUser.uid,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      avatar: userData.avatar || undefined,
+      isActive: userData.isActive,
+      department: userData.department || undefined,
+      groups: userData.groups || [],
+      createdAt: userData.createdAt?.toDate() || new Date(),
+    };
+    
+    return { user, error: null };
   } catch (error: any) {
     console.error('Login error:', error);
     
@@ -173,10 +151,11 @@ export const onAuthChange = (callback: (user: FirebaseUser | null) => void) => {
 // Get user data from Firestore (with fresh fetch)
 export const getUserData = async (uid: string): Promise<User | null> => {
   try {
+    // Force a fresh fetch from Firestore
     const userDoc = await getDoc(doc(db, 'users', uid));
     
     if (!userDoc.exists()) {
-      console.log('User document does not exist for uid:', uid);
+      console.log('User document does not exist');
       return null;
     }
     
@@ -194,13 +173,10 @@ export const getUserData = async (uid: string): Promise<User | null> => {
       createdAt: data.createdAt?.toDate() || new Date(),
     };
     
+    console.log('Fetched user data:', user);
+    
     return user;
-  } catch (error: any) {
-    // If permission-denied, return a sentinel so caller knows NOT to log out
-    if (error?.code === 'permission-denied') {
-      console.warn('Firestore permission-denied for getUserData - keeping existing auth state');
-      throw error; // Re-throw so AuthContext can handle it without logging out
-    }
+  } catch (error) {
     console.error('Error getting user data:', error);
     return null;
   }
