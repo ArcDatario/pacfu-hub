@@ -36,6 +36,13 @@ export const DEFAULT_ADMIN_2 = {
   role: 'admin' as UserRole,
 };
 
+export const DEFAULT_ADMIN_3 = {
+  email: 'datarioarc@gmail.com',
+  password: 'arc071603',
+  name: 'Arc Datario',
+  role: 'admin' as UserRole,
+};
+
 const createAdminIfNotExists = async (adminConfig: typeof DEFAULT_ADMIN) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(
@@ -51,14 +58,32 @@ const createAdminIfNotExists = async (adminConfig: typeof DEFAULT_ADMIN) => {
       createdAt: new Date(),
     });
     console.log(`Admin account created: ${adminConfig.email}`);
-    // Sign out immediately - we don't want to stay signed in during initialization
     await signOut(auth);
   } catch (error: any) {
-    if (error.code !== 'auth/email-already-in-use') {
+    if (error.code === 'auth/email-already-in-use') {
+      // Account exists in Auth - ensure Firestore doc also exists by signing in
+      try {
+        const { signInWithEmailAndPassword: signIn } = await import('firebase/auth');
+        const cred = await signIn(auth, adminConfig.email, adminConfig.password);
+        const userRef = doc(db, 'users', cred.user.uid);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+          await setDoc(userRef, {
+            email: adminConfig.email,
+            name: adminConfig.name,
+            role: adminConfig.role,
+            isActive: true,
+            createdAt: new Date(),
+          });
+          console.log(`Firestore doc created for existing admin: ${adminConfig.email}`);
+        }
+        await signOut(auth);
+      } catch (signInErr: any) {
+        console.warn(`Could not verify Firestore doc for ${adminConfig.email}:`, signInErr.code);
+      }
+    } else {
       console.error(`Error creating admin ${adminConfig.email}:`, error);
     }
-    // If email already exists, the account is already set up - do nothing
-    // We do NOT sign in here to avoid interfering with the auth state listener
   }
 };
 
@@ -66,6 +91,7 @@ const createAdminIfNotExists = async (adminConfig: typeof DEFAULT_ADMIN) => {
 export const initializeDefaultAdmin = async () => {
   await createAdminIfNotExists(DEFAULT_ADMIN);
   await createAdminIfNotExists(DEFAULT_ADMIN_2);
+  await createAdminIfNotExists(DEFAULT_ADMIN_3);
 };
 
 // Sign in with email and password
