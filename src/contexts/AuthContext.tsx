@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         try {
           const userData = await getUserData(firebaseUser.uid);
-          if (userData && userData.isActive) {
+          if (userData && (userData.isActive === true || userData.isActive === ('true' as any))) {
             setAuthState({
               user: userData,
               isAuthenticated: true,

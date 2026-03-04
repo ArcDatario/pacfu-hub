@@ -115,7 +115,10 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
 
     // If Firestore succeeded and user data exists
     if (userData) {
-      if (!userData.isActive) {
+      // Normalize isActive - handle both boolean true and string "true"
+      const isActive = userData.isActive === true || userData.isActive === 'true';
+      
+      if (!isActive) {
         await signOut(auth);
         return { user: null, error: 'Your account has been deactivated. Please contact the admin.' };
       }
@@ -124,9 +127,9 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
         id: firebaseUser.uid,
         email: userData.email || firebaseUser.email || email,
         name: userData.name,
-        role: userData.role,
+        role: userData.role as UserRole,
         avatar: userData.avatar || undefined,
-        isActive: userData.isActive,
+        isActive: true,
         department: userData.department || undefined,
         groups: userData.groups || [],
         createdAt: userData.createdAt?.toDate() || new Date(),
@@ -214,7 +217,7 @@ export const getUserData = async (uid: string): Promise<User | null> => {
       name: data.name,
       role: data.role,
       avatar: data.avatar || undefined,
-      isActive: data.isActive,
+      isActive: data.isActive === true || data.isActive === 'true',
       department: data.department || undefined,
       groups: data.groups || [],
       createdAt: data.createdAt?.toDate() || new Date(),
