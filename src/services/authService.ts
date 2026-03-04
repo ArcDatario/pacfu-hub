@@ -139,15 +139,13 @@ export const loginWithEmail = async (email: string, password: string): Promise<{
 
     // Firestore failed or document missing - build user from Firebase Auth + known info
     // This handles Firestore permission-denied errors gracefully
-    const isKnownAdmin = email === DEFAULT_ADMIN.email || email === DEFAULT_ADMIN_2.email;
+    const knownAdmins = [DEFAULT_ADMIN, DEFAULT_ADMIN_2, DEFAULT_ADMIN_3];
+    const knownAdmin = knownAdmins.find(a => a.email === email);
+    const isKnownAdmin = !!knownAdmin;
     
     if (isKnownAdmin || firestoreError?.code === 'permission-denied') {
-      // For admins: use known data. For faculty with permission issues: use email as name fallback
-      const adminName = email === DEFAULT_ADMIN.email 
-        ? DEFAULT_ADMIN.name 
-        : email === DEFAULT_ADMIN_2.email 
-          ? DEFAULT_ADMIN_2.name 
-          : firebaseUser.email?.split('@')[0] || 'User';
+      // For known admins: use their defined name/role. For others with permission issues: fallback
+      const adminName = knownAdmin?.name ?? (firebaseUser.email?.split('@')[0] || 'User');
       
       const role: UserRole = isKnownAdmin ? 'admin' : 'faculty';
       
