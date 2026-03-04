@@ -64,6 +64,14 @@ export default function Login() {
     } catch {}
     setUserName(fetchedName);
 
+    // Admin accounts bypass OTP verification
+    const adminEmails = ['admin@pacfu.psau.edu', 'admin2@pacfu.psau.edu'];
+    if (adminEmails.includes(email.toLowerCase())) {
+      toast.success('Admin login successful!');
+      navigate('/dashboard');
+      return;
+    }
+
     // Credentials valid - now send verification code
     setSendingCode(true);
     

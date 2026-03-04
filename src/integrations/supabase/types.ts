@@ -112,6 +112,54 @@ export type Database = {
         }
         Relationships: []
       }
+      registrations: {
+        Row: {
+          account_email: string | null
+          address: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          department: string
+          email: string
+          full_name: string
+          id: string
+          phone: string
+          purpose: string
+          receipt_url: string
+          status: string
+        }
+        Insert: {
+          account_email?: string | null
+          address: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          department: string
+          email: string
+          full_name: string
+          id?: string
+          phone: string
+          purpose: string
+          receipt_url: string
+          status?: string
+        }
+        Update: {
+          account_email?: string | null
+          address?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          department?: string
+          email?: string
+          full_name?: string
+          id?: string
+          phone?: string
+          purpose?: string
+          receipt_url?: string
+          status?: string
+        }
+        Relationships: []
+      }
       verification_codes: {
         Row: {
           code: string
